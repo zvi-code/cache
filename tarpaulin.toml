@@ -1,0 +1,12 @@
+[all]
+exclude-files=[
+#    "bench/*",
+#    "build.rs",
+    "src/main.rs",
+#    "test/**/*",
+#    "mod.rs"
+]
+fail-under=70
+no-fail-fast=true
+skip-clean=true
+force-clean=false

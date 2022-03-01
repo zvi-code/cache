@@ -33,32 +33,109 @@ fn main() {
         (20, 199982),
         (32, 9982221),
         (45, 889292),
-        (544, 8827272),
-        (9, 8872),
-        (22281, 88711),
+        (44, 8827272),
+        (89, 8872),
+        (81, 88711),
+        (11, 88711),
+        (13, 88711),
+        (20, 199982),
     ];
+    let kv_pairs2 = [
+        (20, 199982),
+        (332, 9982221),
+        (425, 889292),
+        (542, 8827272),
+        (89, 8872),
+        (281, 88711),
+        (888, 88711),
+        (333, 88711),
+        (266, 199982),
+    ];
+    let kv_pairs3 = [
+        (1, 199982),
+        (2, 9982221),
+        (3, 889292),
+        (4, 8827272),
+        (5, 8872),
+        (6, 88711),
+        (7, 88711),
+        (8, 88711),
+        (9, 199982),
+    ];
+    cl_vec.push(CacheLine::new());
+    let mut free_cl = 1;
+
     let insert_res = kv_pairs
+        .iter()
+        .map(|(k, v)| {let res = bucket.put(&mut cl_vec, *k, &None, *v, false, Some(free_cl));
+        match res.borrow() { InsertRes::Success(cl) => if *cl == free_cl { cl_vec.push(CacheLine::new()); free_cl+=1;}, _ => (),}; res})
+        .collect::<Vec<InsertRes>>();
+    insert_res.iter().for_each(|res| match res {
+        InsertRes::Success(ix) => println!("Succ ix {}", ix),
+        InsertRes::EntryExists(ix) => println!("Exist ix {}", ix),
+        InsertRes::OutOfSpace => println!("OOS"),
+    });
+    kv_pairs
+        .iter()
+        .for_each(|(k, v)| match bucket.get(&mut cl_vec, *k, &None, None) {
+            FindRes::Found(d) => {
+                println!(
+                    "Get: key={} value={}: cl {} slot {} data {}",
+                    k, v, d.1, d.0, d.2.value
+                );
+            }
+            FindRes::NotFound => {
+                println!("Get: key={} value={}: didn't find entry", k, v);
+            }
+        });
+    kv_pairs2
+        .iter()
+        .for_each(|(k, v)| match bucket.delete(&mut cl_vec, *k, &None, None) {
+            FindRes::Found(d) => {
+                println!(
+                    "Delete: key={} value={}: cl {} slot {} data {}",
+                    k, v, d.1, d.0, d.2.value
+                );
+            }
+            FindRes::NotFound => {
+                println!("Delete: key={} value={}: didn't find entry", k, v);
+            }
+        });
+    kv_pairs
+        .iter()
+        .for_each(|(k, v)| match bucket.get(&mut cl_vec, *k, &None, None) {
+            FindRes::Found(d) => {
+                println!(
+                    "key={} value={}: cl {} slot {} data {}",
+                    k, v, d.1, d.0, d.2.value
+                );
+            }
+            FindRes::NotFound => {
+                println!("key={} value={}: didn't find entry", k, v);
+            }
+        });
+    let insert_res3 = kv_pairs3
         .iter()
         .map(|(k, v)| bucket.put(&mut cl_vec, *k, &None, *v, false, None))
         .collect::<Vec<InsertRes>>();
-
-    let ret = bucket.get(&mut cl_vec, 15, &None, None);
-    match ret {
-        FindRes::Found(d) => {
-            println!(
-                "15 value={}: cl {} slot {} data {}",
-                0xabba, d.1, d.0, d.2.value
-            );
-        }
-        FindRes::NotFound => println!("didn't find entry"),
-    }
-    let ret = bucket.get(&mut cl_vec, 25, &None, None);
-    match ret {
-        FindRes::Found(d) => {
-            println!("25: cl {} slot {} data {}", d.1, d.0, d.2.value);
-        }
-        FindRes::NotFound => println!("25: didn't find entry"),
-    }
+    insert_res3.iter().for_each(|res| match res {
+        InsertRes::Success(ix) => println!("Succ ix {}", ix),
+        InsertRes::EntryExists(ix) => println!("Exist ix {}", ix),
+        InsertRes::OutOfSpace => println!("OOS"),
+    });
+    kv_pairs3
+        .iter()
+        .for_each(|(k, v)| match bucket.get(&mut cl_vec, *k, &None, None) {
+            FindRes::Found(d) => {
+                println!(
+                    "key={} value={}: cl {} slot {} data {}",
+                    k, v, d.1, d.0, d.2.value
+                );
+            }
+            FindRes::NotFound => {
+                println!("key={} value={}: didn't find entry", k, v);
+            }
+        });
 }
 
 //#[bitfield]
@@ -316,6 +393,29 @@ impl Bucket {
         let mut cl = self.head;
         while cl != CacheLine::INVALID_CL {
             let res = cl_arr.get_mut(cl as usize).unwrap().find_entry(
+                bucket_key,
+                key_reminder,
+                key_reminders,
+            );
+            match res {
+                ClFindResult::FoundWSlot((slot, data)) => return FindRes::Found((slot, cl, data)),
+                ClFindResult::NotFountFreeSlotsAndNext((_first_empty_slots, next_cl)) => {
+                    cl = next_cl;
+                }
+            }
+        }
+        FindRes::NotFound
+    }
+    pub fn delete(
+        &mut self,
+        cl_arr: &mut Vec<CacheLine>,
+        bucket_key: InBktKey,
+        key_reminder: &KeyReminder,
+        key_reminders: Option<&[KeyReminder]>,
+    ) -> FindRes {
+        let mut cl = self.head;
+        while cl != CacheLine::INVALID_CL {
+            let res = cl_arr.get_mut(cl as usize).unwrap().remove_entry(
                 bucket_key,
                 key_reminder,
                 key_reminders,
