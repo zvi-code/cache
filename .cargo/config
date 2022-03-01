@@ -1,0 +1,6 @@
+[build]
+rustflags = ['-D', 'warnings', '-C',  'target-cpu=native', '-C',  'opt-level=3',  '-C',  'debuginfo=0',  '-C', 'target-feature=+popcnt']
+
+[env]
+# Required to enable SASL support in librdkafka on Mac.
+PKG_CONFIG_PATH="/usr/local/opt/cyrus-sasl/lib/pkgconfig"
