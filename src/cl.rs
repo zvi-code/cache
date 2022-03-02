@@ -117,7 +117,7 @@ impl CacheLine {
         for (slot, bktk) in self.bkt_keys.iter().enumerate() {
             if (self.flags.valid_slots.bitand(1 << slot)) != 0 {
                 if *bktk == bucket_key {
-                    if key_reminder.unwrap() == cl_info.get_data(slot).1.unwrap() {
+                    if key_reminder.unwrap() == cl_info.get_key_rem(slot).unwrap() {
                         return ClFindResult::FoundWSlot((slot as ClSlot, unsafe {
                             self.entries.get(slot).unwrap().data_ent.clone()
                         }));
