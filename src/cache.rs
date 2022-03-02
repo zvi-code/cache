@@ -11,6 +11,7 @@ pub struct Cache {
     cl_store: ClStore,
     next_free_cl: ClIndex,
     num_buckets: IBktId,
+    buckets_mask: u128,
     bytes_for_bucket_id: usize,
     inline_val_num_bytes: u32,
     inline_key_num_bytes: u32,
@@ -24,23 +25,28 @@ impl Cache {
             cl_store: ClStore::new(7),
             next_free_cl: CacheLine::INVALID_CL,
             num_buckets: 1 << (bytes_for_bucket_id * 8),
+            buckets_mask: 0,
             bytes_for_bucket_id,
             inline_val_num_bytes: 4,
             inline_key_num_bytes: 2,
             total_capacity: capacity,
         };
-        (0..cache.num_buckets).for_each(|_| cache.buckets.push(Bucket::new()));
+        (0..bytes_for_bucket_id).for_each(|_| {
+            cache.buckets_mask <<= 8;
+            cache.buckets_mask |= 0xff;
+        });
+        (0..cache.num_buckets).for_each(|_| {
+            let mut bkt = Bucket::new();
+            bkt.head = cache.cl_store.allocate_cl();
+            cache.buckets.push(bkt)
+        });
         cache.next_free_cl = cache.cl_store.allocate_cl();
         cache
     }
     fn get_bucket_id(&self, id: &[u8]) -> (IBktId, InBktKey, u128) {
         let hash = murmur3_x86_128(&mut id.clone(), 0).unwrap();
         (
-            IBktId::from_be_bytes(
-                hash.to_be_bytes()[0..self.bytes_for_bucket_id]
-                    .try_into()
-                    .unwrap(),
-            ),
+            (hash & self.buckets_mask) as IBktId,
             InBktKey::from_be_bytes(
                 hash.to_be_bytes()[0..self.inline_key_num_bytes as usize]
                     .try_into()
@@ -59,6 +65,7 @@ impl Cache {
             bkt_key,
             Some(&h.to_be_bytes()),
             ValueType::from_be_bytes(
+                ///todo handle shorter value
                 (&value[0..self.inline_val_num_bytes as usize])
                     .try_into()
                     .unwrap(),
@@ -85,14 +92,14 @@ impl Cache {
         let res = self.buckets[bucket_id].get(&mut self.cl_store, bkt_key, Some(&h.to_be_bytes()));
         match res {
             FindRes::Found(d) => {
-                println!(
-                    "Get: key={:?}: cl {} slot {} data {}",
-                    key, d.1, d.0, d.2.value
-                );
+                // println!(
+                //     "Get: key={:?}: cl {} slot {} data {}",
+                //     key, d.1, d.0, d.2.value
+                // );
                 Some(d.2.value.to_be_bytes().to_vec())
             }
             FindRes::NotFound => {
-                println!("Get: key={:?}: didn't find entry", key);
+                // println!("Get: key={:?}: didn't find entry", key);
                 None
             }
         }

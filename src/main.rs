@@ -10,6 +10,7 @@ use std::mem::size_of_val;
 // use std::error::Error;
 // use std::intrinsics::offset;
 use crate::bucket::{Bucket, FindRes, InsertRes};
+use crate::cache::Cache;
 use crate::cl::CacheLine;
 use crate::cl_store::ClStore;
 // use std::ptr::hash;
@@ -35,7 +36,13 @@ fn main() {
     println!("Hello, world!{}", size_of_val(&CacheLine::new()));
     let mut cl_store = ClStore::new(7);
     let mut bucket = Bucket::new();
-
+    let mut cache = Cache::new(2, 1024);
+    cache.upsert("my paycheck".as_ref(), "aaaaa".as_ref());
+    let res = cache.get("my paycheck".as_ref());
+    match res {
+        Some(resp) => println!("asked: my paycheck answered: {:?}", resp),
+        None => println!("asked: my paycheck No answer"),
+    }
     bucket.head = cl_store.allocate_cl();
 
     let kv_pairs = [
