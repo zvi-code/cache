@@ -1,9 +1,17 @@
+mod bucket;
+mod cache;
+mod cl;
+mod cl_store;
+
 // use std::arch::x86_64::{_mm256_cmpeq_epi16, _mm256_shuffle_epi8, _mm_crc32_u64, _mm_sha1msg1_epu32};
 use std::borrow::Borrow;
+use std::mem::size_of_val;
 // use std::collections::{HashMap, HashSet, VecDeque};
 // use std::error::Error;
 // use std::intrinsics::offset;
-use std::ops::{BitAnd, BitXorAssign};
+use crate::bucket::{Bucket, FindRes, InsertRes};
+use crate::cl::CacheLine;
+use crate::cl_store::ClStore;
 // use std::ptr::hash;
 // use modular_bitfield::prelude::*;
 
@@ -23,11 +31,12 @@ fn main() {
     //insert Key, Value
     //get Key
     //Update Key
-    //delete Key
-    println!("Hello, world!");
-    let mut cl_vec = vec![CacheLine::new()];
+    //delete Keyc
+    println!("Hello, world!{}", size_of_val(&CacheLine::new()));
+    let mut cl_store = ClStore::new(7);
     let mut bucket = Bucket::new();
-    bucket.head = 0;
+
+    bucket.head = cl_store.allocate_cl();
 
     let kv_pairs = [
         (20, 199982),
@@ -62,22 +71,43 @@ fn main() {
         (8, 88711),
         (9, 199982),
     ];
-    cl_vec.push(CacheLine::new());
-    let mut free_cl = 1;
+    let mut free_cl = cl_store.allocate_cl();
 
     let insert_res = kv_pairs
         .iter()
-        .map(|(k, v)| {let res = bucket.put(&mut cl_vec, *k, &None, *v, false, Some(free_cl));
-        match res.borrow() { InsertRes::Success(cl) => if *cl == free_cl { cl_vec.push(CacheLine::new()); free_cl+=1;}, _ => (),}; res})
+        .map(|(k, v)| {
+            let res = bucket.put(
+                &mut cl_store,
+                ((*k as usize) + 0xffff66677).to_string().as_bytes(),
+                None,
+                *k,
+                Some(((*k as usize) + 0xffff66677).to_string().as_bytes()),
+                *v,
+                false,
+                Some(free_cl),
+            );
+            match res.borrow() {
+                InsertRes::Success(cl) => {
+                    if *cl == free_cl {
+                        free_cl = cl_store.allocate_cl();
+                    }
+                }
+                _ => (),
+            };
+            res
+        })
         .collect::<Vec<InsertRes>>();
     insert_res.iter().for_each(|res| match res {
         InsertRes::Success(ix) => println!("Succ ix {}", ix),
         InsertRes::EntryExists(ix) => println!("Exist ix {}", ix),
         InsertRes::OutOfSpace => println!("OOS"),
     });
-    kv_pairs
-        .iter()
-        .for_each(|(k, v)| match bucket.get(&mut cl_vec, *k, &None, None) {
+    kv_pairs.iter().for_each(|(k, v)| {
+        match bucket.get(
+            &mut cl_store,
+            *k,
+            Some(((*k as usize) + 0xffff66677).to_string().as_bytes()),
+        ) {
             FindRes::Found(d) => {
                 println!(
                     "Get: key={} value={}: cl {} slot {} data {}",
@@ -87,10 +117,14 @@ fn main() {
             FindRes::NotFound => {
                 println!("Get: key={} value={}: didn't find entry", k, v);
             }
-        });
-    kv_pairs2
-        .iter()
-        .for_each(|(k, v)| match bucket.delete(&mut cl_vec, *k, &None, None) {
+        }
+    });
+    kv_pairs2.iter().for_each(|(k, v)| {
+        match bucket.delete(
+            &mut cl_store,
+            *k,
+            Some(((*k as usize) + 0xffff66677).to_string().as_bytes()),
+        ) {
             FindRes::Found(d) => {
                 println!(
                     "Delete: key={} value={}: cl {} slot {} data {}",
@@ -100,10 +134,14 @@ fn main() {
             FindRes::NotFound => {
                 println!("Delete: key={} value={}: didn't find entry", k, v);
             }
-        });
-    kv_pairs
-        .iter()
-        .for_each(|(k, v)| match bucket.get(&mut cl_vec, *k, &None, None) {
+        }
+    });
+    kv_pairs.iter().for_each(|(k, v)| {
+        match bucket.get(
+            &mut cl_store,
+            *k,
+            Some(((*k as usize) + 0xffff66677).to_string().as_bytes()),
+        ) {
             FindRes::Found(d) => {
                 println!(
                     "key={} value={}: cl {} slot {} data {}",
@@ -113,19 +151,34 @@ fn main() {
             FindRes::NotFound => {
                 println!("key={} value={}: didn't find entry", k, v);
             }
-        });
+        }
+    });
     let insert_res3 = kv_pairs3
         .iter()
-        .map(|(k, v)| bucket.put(&mut cl_vec, *k, &None, *v, false, None))
+        .map(|(k, v)| {
+            bucket.put(
+                &mut cl_store,
+                ((*k as usize) + 0xffff666277).to_string().as_bytes(),
+                None,
+                *k,
+                Some(((*k as usize) + 0xffff666277).to_string().as_bytes()),
+                *v,
+                false,
+                None,
+            )
+        })
         .collect::<Vec<InsertRes>>();
     insert_res3.iter().for_each(|res| match res {
         InsertRes::Success(ix) => println!("Succ ix {}", ix),
         InsertRes::EntryExists(ix) => println!("Exist ix {}", ix),
         InsertRes::OutOfSpace => println!("OOS"),
     });
-    kv_pairs3
-        .iter()
-        .for_each(|(k, v)| match bucket.get(&mut cl_vec, *k, &None, None) {
+    kv_pairs3.iter().for_each(|(k, v)| {
+        match bucket.get(
+            &mut cl_store,
+            *k,
+            Some(((*k as usize) + 0xffff66677).to_string().as_bytes()),
+        ) {
             FindRes::Found(d) => {
                 println!(
                     "key={} value={}: cl {} slot {} data {}",
@@ -135,330 +188,23 @@ fn main() {
             FindRes::NotFound => {
                 println!("key={} value={}: didn't find entry", k, v);
             }
-        });
-}
-
-//#[bitfield]
-#[repr(C, align(4))]
-#[derive(Clone, Copy, Debug)]
-pub struct CacheDataEntry {
-    // entry_type: B2,
-    // valid: B1,
-    // last: B1,
-    // flags: u16,
-    value: ValueType,
-}
-//#[bitfield]
-#[repr(C, align(4))]
-#[derive(Clone, Copy, Debug)]
-pub struct CacheMetaEntry {
-    // entry_type: B2,
-    // valid: B1,
-    // last: B1,
-    blob: ValueType,
-}
-//#[derive(BitfieldSpecifier)]
-#[repr(C, align(4))]
-#[derive(Clone, Copy)]
-pub union CacheEntry {
-    data_ent: CacheDataEntry,
-    ctrl_ent: CacheMetaEntry,
-}
-//#[bitfield]
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-#[repr(C, align(4))]
-pub struct CLFlags {
-    valid_slots: ClValidSlotsMask,
-    flags1: u8,
-    flags2: u16,
-}
-#[repr(C, align(64))]
-// #[derive(Debug)]
-pub struct CacheLine {
-    flags: CLFlags,
-    entries: [CacheEntry; 7],
-    bkt_keys: [InBktKey; 7],
-    next: ClIndex,
-}
-// use bitmask_enum::bitmask;
-
-type InBktKey = u16;
-
-// #[bitmask(u8)]
-type ClValidSlotsMask = u8;
-
-type ClSlot = usize;
-type ClIndex = u32;
-type ValueType = u32;
-type KeyReminder = Option<Vec<u8>>;
-#[derive(Clone, Debug)]
-pub enum ClInsertResult {
-    NextCl(ClIndex),
-    AllocatedSlot(ClSlot),
-}
-#[derive(Clone, Debug)]
-pub enum ClFindResult {
-    FoundWSlot((ClSlot, CacheDataEntry)),
-    NotFountFreeSlotsAndNext((ClValidSlotsMask, ClIndex)),
-}
-impl CacheLine {
-    pub const INVALID_CL: u32 = u32::MAX as u32;
-    pub fn new() -> CacheLine {
-        CacheLine {
-            entries: [CacheEntry {
-                data_ent: CacheDataEntry { value: 0 },
-            }; 7],
-            flags: CLFlags {
-                valid_slots: 0x0,
-                flags1: 0,
-                flags2: 0,
-            },
-            next: CacheLine::INVALID_CL,
-            bkt_keys: [0; 7],
         }
-    }
-    pub fn new_with_entry(bucket_key: InBktKey, value: ValueType) -> CacheLine {
-        let mut cl = CacheLine::new();
-        cl.insert_entry_to_slot(0, bucket_key, value);
-        cl
-    }
-    pub fn set_next_cl(&mut self, next_cl: ClIndex) -> Option<ClIndex> {
-        let old_next = self.next;
-        self.next = next_cl;
-        match old_next {
-            CacheLine::INVALID_CL => None,
-            next => Some(next),
-        }
-    }
-    pub fn insert_entry_to_slot(
-        &mut self,
-        offset: ClSlot,
-        bucket_key: InBktKey,
-        value: ValueType,
-    ) -> () {
-        let ent: &mut CacheEntry = self.entries.get_mut(offset).unwrap();
-
-        let bkt_key_ptr: &mut InBktKey = self.bkt_keys.get_mut(offset).unwrap();
-        *bkt_key_ptr = bucket_key;
-        self.flags.valid_slots.bitxor_assign(1 << offset);
-        // unsafe {
-        ent.data_ent.value = value; //u32::from_be_bytes(*value[0..4]);
-                                    // }
-                                    // ent
-    }
-    // it is assumed that either key reminder exists or not
-    pub fn find_entry(
-        &self,
-        bucket_key: InBktKey,
-        key_reminder: &KeyReminder,
-        key_reminders: Option<&[KeyReminder]>,
-    ) -> ClFindResult {
-        let mut first_empty_slots = 0xff;
-        for (i, bktk) in self.bkt_keys.iter().enumerate() {
-            if (self.flags.valid_slots.bitand(1 << i)) != 0 {
-                if *bktk == bucket_key {
-                    let mut rem_cmp = &None;
-                    match key_reminders {
-                        Some(key_reminders) => rem_cmp = &key_reminders[i],
-                        None => (),
-                    }
-                    if *key_reminder == *rem_cmp {
-                        return ClFindResult::FoundWSlot((i as ClSlot, unsafe {
-                            self.entries.get(i).unwrap().data_ent.clone()
-                        }));
-                    }
-                }
-            } else if first_empty_slots == 0xff {
-                first_empty_slots = i;
+    });
+    kv_pairs3.iter().for_each(|(k, v)| {
+        match bucket.get(
+            &mut cl_store,
+            *k,
+            Some(((*k as usize) + 0xffff666277).to_string().as_bytes()),
+        ) {
+            FindRes::Found(d) => {
+                println!(
+                    "key={} value={}: cl {} slot {} data {}",
+                    k, v, d.1, d.0, d.2.value
+                );
+            }
+            FindRes::NotFound => {
+                println!("key={} value={}: didn't find entry", k, v);
             }
         }
-        ClFindResult::NotFountFreeSlotsAndNext((first_empty_slots as ClValidSlotsMask, self.next))
-    }
-    pub fn remove_entry(
-        &mut self,
-        bucket_key: InBktKey,
-        key_reminder: &KeyReminder,
-        key_reminders: Option<&[KeyReminder]>,
-    ) -> ClFindResult {
-        let res = self.find_entry(bucket_key, key_reminder, key_reminders);
-        match res.borrow() {
-            ClFindResult::FoundWSlot((slot, _entry)) => {
-                self.flags.valid_slots.bitxor_assign(1 << slot)
-            }
-            _ => (),
-        };
-        res
-    }
+    });
 }
-
-#[repr(C, align(64))]
-pub struct Bucket {
-    head: ClIndex,
-    // bloom_filter: [u8]
-    // free entries list
-    // num cl's
-    //capacity
-    //credit
-    //lru counter
-}
-
-// impl Iterator for Bucket {
-//     type Item = ();
-//
-//     fn next(&mut self) -> Option<Self::Item> {
-//         todo!()
-//     }
-// }
-//pub struct
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum InsertRes {
-    EntryExists(u32),
-    Success(u32),
-    OutOfSpace,
-}
-#[derive(Clone, Debug)]
-pub enum FindRes {
-    NotFound,
-    Found((ClSlot, ClIndex, CacheDataEntry)),
-}
-impl Bucket {
-    pub fn new() -> Bucket {
-        Bucket {
-            head: CacheLine::INVALID_CL,
-        }
-    }
-    pub fn put(
-        &mut self,
-        cl_arr: &mut Vec<CacheLine>,
-        bucket_key: InBktKey,
-        key_reminder: &KeyReminder,
-        value: ValueType,
-        _should_evict: bool,
-        new_cl: Option<ClIndex>,
-    ) -> InsertRes {
-        //get first cl in bucket - if exist
-        //search entry in cl - remember free slots
-        //if not found continue to next cl
-        //if not found insert new entry to free slot or allocate new cl
-        //evict entry if can't allocate any more resources
-        let mut cl = self.head;
-        let mut cl_to_write = CacheLine::INVALID_CL;
-        let mut slot_to_write = 0;
-        let mut cl_tail = CacheLine::INVALID_CL;
-        while cl != CacheLine::INVALID_CL {
-            let res =
-                cl_arr
-                    .get_mut(cl as usize)
-                    .unwrap()
-                    .find_entry(bucket_key, key_reminder, None);
-            cl_tail = cl;
-            match res {
-                ClFindResult::FoundWSlot((_slot, _d)) => return InsertRes::EntryExists(cl),
-                ClFindResult::NotFountFreeSlotsAndNext((first_empty_slots, next_cl)) => {
-                    if first_empty_slots != 0xff {
-                        cl_to_write = cl;
-                        slot_to_write = first_empty_slots;
-                    }
-                    cl = next_cl;
-                }
-            }
-        }
-        if cl_to_write != CacheLine::INVALID_CL {
-            cl_arr
-                .get_mut(cl_to_write as usize)
-                .unwrap()
-                .insert_entry_to_slot(slot_to_write as usize, bucket_key, value);
-            return InsertRes::Success(cl_to_write);
-        }
-        match new_cl {
-            Some(cl) => {
-                cl_arr
-                    .get_mut(cl as usize)
-                    .unwrap()
-                    .insert_entry_to_slot(0, bucket_key, value);
-                cl_arr.get_mut(cl_tail as usize).unwrap().set_next_cl(cl);
-                return InsertRes::Success(cl);
-            }
-            None => (),
-        }
-        InsertRes::OutOfSpace
-    }
-    pub fn get(
-        &mut self,
-        cl_arr: &mut Vec<CacheLine>,
-        bucket_key: InBktKey,
-        key_reminder: &KeyReminder,
-        key_reminders: Option<&[KeyReminder]>,
-    ) -> FindRes {
-        let mut cl = self.head;
-        while cl != CacheLine::INVALID_CL {
-            let res = cl_arr.get_mut(cl as usize).unwrap().find_entry(
-                bucket_key,
-                key_reminder,
-                key_reminders,
-            );
-            match res {
-                ClFindResult::FoundWSlot((slot, data)) => return FindRes::Found((slot, cl, data)),
-                ClFindResult::NotFountFreeSlotsAndNext((_first_empty_slots, next_cl)) => {
-                    cl = next_cl;
-                }
-            }
-        }
-        FindRes::NotFound
-    }
-    pub fn delete(
-        &mut self,
-        cl_arr: &mut Vec<CacheLine>,
-        bucket_key: InBktKey,
-        key_reminder: &KeyReminder,
-        key_reminders: Option<&[KeyReminder]>,
-    ) -> FindRes {
-        let mut cl = self.head;
-        while cl != CacheLine::INVALID_CL {
-            let res = cl_arr.get_mut(cl as usize).unwrap().remove_entry(
-                bucket_key,
-                key_reminder,
-                key_reminders,
-            );
-            match res {
-                ClFindResult::FoundWSlot((slot, data)) => return FindRes::Found((slot, cl, data)),
-                ClFindResult::NotFountFreeSlotsAndNext((_first_empty_slots, next_cl)) => {
-                    cl = next_cl;
-                }
-            }
-        }
-        FindRes::NotFound
-    }
-}
-// pub struct Cache <K>{
-//     hmap: HashMap<K, Bucket>,
-//     hashs: HashSet<u32>,
-//     cls: Vec<CacheLine>,
-//     //free CL's
-//     free_cls: VecDeque<u32>,
-// }
-// impl Cache<u32> {
-//     fn get_bucket_id(id: &[u8]) -> u32 {
-//         u32::from_be_bytes(id[0..4].try_into().unwrap())
-//         //_mm_crc32_u64()
-//         //hash()
-//         //_mm256_shuffle_epi8()
-//
-//     }
-//     pub fn upsert(&mut self, key: &[u8], value: &[u8]) -> Option<bool>{
-//         let bucket_id = self.get_bucket_id(key);
-//         //lock bucket
-//         let bucket = self.hmap.get_mut(&bucket_id);
-//         let bkt = match bucket {
-//             Some(bkt_list) => {
-//                 bkt_list
-//             },
-//             None => {
-//                 Bucket::new()
-//             }
-//         };
-//
-//         None
-//     }
-//
-// }
