@@ -5,7 +5,7 @@ use std::ops::{BitAnd, BitXorAssign};
 pub type ClValidSlotsMask = u8;
 
 pub type ClSlot = usize;
-pub type ValueType = u32;
+pub type ValueType = [u8; CacheLine::NUM_BYTES_INLINE_VAL];
 pub type InBktKey = u16;
 
 pub type KeyReminder<'a> = Option<&'a [u8]>;
@@ -40,8 +40,8 @@ pub struct CLFlags {
 // #[derive(Debug)]
 pub struct CacheLine {
     flags: CLFlags,
-    entries: [CacheEntry; 7],
-    bkt_keys: [InBktKey; 7],
+    entries: [CacheEntry; CacheLine::NUM_SLOTS],
+    bkt_keys: [InBktKey; CacheLine::NUM_SLOTS],
     next: ClIndex,
 }
 // use bitmask_enum::bitmask;
@@ -63,10 +63,13 @@ impl CacheLine {
     pub const INVALID_CL: u32 = u32::MAX as u32;
     pub const INVALID_SLOT: usize = 7;
     pub const NUM_SLOTS: usize = 7;
+    pub const NUM_BYTES_INLINE_VAL: usize = 4;
     pub fn new() -> CacheLine {
         CacheLine {
             entries: [CacheEntry {
-                data_ent: CacheDataEntry { value: 0 },
+                data_ent: CacheDataEntry {
+                    value: [0, 0, 0, 0],
+                },
             }; CacheLine::NUM_SLOTS],
             flags: CLFlags {
                 valid_slots: 0x0,
@@ -107,6 +110,7 @@ impl CacheLine {
                                     // ent
     }
     // it is assumed that either key reminder exists or not
+    #[inline(always)]
     pub fn find_entry(
         &self,
         bucket_key: InBktKey,

@@ -187,9 +187,11 @@ impl ClStore {
             None => (),
         }
     }
+    #[inline(always)]
     pub fn get_cl(&mut self, cl_ix: ClIndex) -> Option<&CacheLine> {
         Some(self.cls.get(cl_ix as usize).unwrap())
     }
+    #[inline(always)]
     pub fn get_cl_w_store(
         &mut self,
         cl_ix: ClIndex,
@@ -202,6 +204,7 @@ impl ClStore {
             },
         )
     }
+    #[inline(always)]
     pub fn get_mut_cl_w_store(
         &mut self,
         cl_ix: ClIndex,
