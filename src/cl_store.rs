@@ -1,6 +1,6 @@
 use crate::cl::ClSlot;
 use crate::CacheLine;
-use plotters::coord::ranged1d::ReversibleRanged;
+// use plotters::coord::ranged1d::ReversibleRanged;
 use roaring::RoaringBitmap;
 
 /// Store data associated to the entry in the corresponding cl
@@ -64,7 +64,7 @@ impl PerClStore for PerClVecMemStore {
     ) -> () {
         match id {
             Some(id) => {
-                if slot > self.ids.len() - 1 {
+                if slot + 1 > self.ids.len() {
                     self.ids.resize(slot + 1, vec![]);
                 }
                 self.ids[slot] = id.to_vec();
@@ -77,7 +77,7 @@ impl PerClStore for PerClVecMemStore {
         }
         match k_rem {
             Some(k_rem) => {
-                if slot > self.k_rems.len() - 1 {
+                if slot + 1 > self.k_rems.len() {
                     self.k_rems.resize(slot + 1, vec![]);
                 }
                 self.k_rems[slot] = k_rem.to_vec();
@@ -90,7 +90,7 @@ impl PerClStore for PerClVecMemStore {
         }
         match val_rem {
             Some(val_rem) => {
-                if slot > self.v_s.len() - 1 {
+                if slot + 1 > self.v_s.len() {
                     self.v_s.resize(slot + 1, vec![]);
                 }
                 self.v_s[slot] = val_rem.to_vec();
@@ -112,7 +112,7 @@ impl PerClStore for PerClVecMemStore {
     fn get_id(&self, slot: ClSlot) -> Option<&[u8]> {
         match self.ids.get(slot) {
             Some(k_rems) => {
-                if k_rems != vec![] {
+                if *k_rems != vec![] {
                     return Some(k_rems.as_slice());
                 } else {
                     None
@@ -124,7 +124,7 @@ impl PerClStore for PerClVecMemStore {
     fn get_key_rem(&self, slot: ClSlot) -> Option<&[u8]> {
         match self.k_rems.get(slot) {
             Some(k_rems) => {
-                if k_rems != vec![] {
+                if *k_rems != vec![] {
                     return Some(k_rems.as_slice());
                 } else {
                     None
@@ -136,7 +136,7 @@ impl PerClStore for PerClVecMemStore {
     fn get_value_suffix(&self, slot: ClSlot) -> Option<&[u8]> {
         match self.v_s.get(slot) {
             Some(k_rems) => {
-                if k_rems != vec![] {
+                if *k_rems != vec![] {
                     return Some(k_rems.as_slice());
                 } else {
                     None
@@ -150,24 +150,24 @@ pub struct ClStore {
     cls: Vec<CacheLine>,
     cls_store: Vec<Option<PerClVecMemStore>>,
     free_cls: RoaringBitmap,
-    n_cl_ents: u16,
+    // n_cl_ents: u16,
 }
-
+#[allow(unused)]
 impl ClStore {
-    pub fn new(num_cl_entries: u16) -> ClStore {
+    pub fn new(_num_cl_entries: u16) -> ClStore {
         ClStore {
             cls: vec![],
             free_cls: RoaringBitmap::new(),
-            n_cl_ents: num_cl_entries,
+            // n_cl_ents: num_cl_entries,
             cls_store: vec![],
         }
     }
     pub fn allocate_cl(&mut self) -> ClIndex {
         match self.free_cls.min() {
             Some(cl_ix) => {
-                match self.cls_store[cl_ix] {
+                match self.cls_store[cl_ix as usize] {
                     Some(_) => (),
-                    None => self.cls_store[cl_ix] = Some(PerClVecMemStore::new()),
+                    None => self.cls_store[cl_ix as usize] = Some(PerClVecMemStore::new()),
                 };
                 return cl_ix;
             }
@@ -181,25 +181,37 @@ impl ClStore {
     pub fn delete_cl(&mut self, cl_ix: ClIndex) -> () {
         match self.cls_store.get(cl_ix as usize) {
             Some(_) => {
-                self.cls_store[cl_ix] = None;
+                self.cls_store[cl_ix as usize] = None;
                 self.free_cls.insert(cl_ix);
             }
             None => (),
         }
     }
-    pub fn get_cl(&mut self, cl_ix: ClIndex) -> &Option<CacheLine> {
-        &self.cls.get(cl_ix)
+    pub fn get_cl(&mut self, cl_ix: ClIndex) -> Option<&CacheLine> {
+        Some(self.cls.get(cl_ix as usize).unwrap())
     }
     pub fn get_cl_w_store(
         &mut self,
         cl_ix: ClIndex,
     ) -> (Option<&CacheLine>, Option<&dyn PerClStore>) {
-        (self.cls.get(cl_ix), self.cls_store.get(cl_ix))
+        (
+            self.cls.get(cl_ix as usize),
+            match self.cls_store.get(cl_ix as usize).unwrap() {
+                Some(pcls) => Some(pcls),
+                None => None,
+            },
+        )
     }
     pub fn get_mut_cl_w_store(
         &mut self,
         cl_ix: ClIndex,
     ) -> (Option<&mut CacheLine>, Option<&mut dyn PerClStore>) {
-        (self.cls.get_mut(cl_ix), self.cls_store.get_mut(cl_ix))
+        (
+            self.cls.get_mut(cl_ix as usize),
+            match self.cls_store.get_mut(cl_ix as usize).unwrap() {
+                Some(pcls) => Some(pcls),
+                None => None,
+            },
+        )
     }
 }

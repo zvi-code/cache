@@ -46,7 +46,7 @@ impl Bucket {
         id: &[u8],
         value: Option<&[u8]>,
         bucket_key: InBktKey,
-        key_reminder: &KeyReminder,
+        key_reminder: KeyReminder,
         value_prefix: ValueType,
         _should_evict: bool,
         new_cl: Option<ClIndex>,
@@ -90,12 +90,16 @@ impl Bucket {
             };
         }
         if cl_to_write != CacheLine::INVALID_CL {
-            let mut cl_info = cl_store.get_mut_cl_w_store(cl_to_write);
+            let cl_info = cl_store.get_mut_cl_w_store(cl_to_write);
             cl_info.0.unwrap().insert_entry_to_slot(
                 slot_to_write as usize,
                 bucket_key,
                 value_prefix,
             );
+            cl_info
+                .1
+                .unwrap()
+                .set(slot_to_write, Some(id), Some(&key_reminder.unwrap()), value);
             if set_tail {
                 cl_store
                     .get_mut_cl_w_store(cl_tail)
@@ -103,10 +107,6 @@ impl Bucket {
                     .unwrap()
                     .set_next_cl(cl_to_write);
             }
-            cl_info
-                .1
-                .unwrap()
-                .set(slot_to_write, Some(id), Some(&key_reminder.unwrap()), value);
             return InsertRes::Success(cl_to_write);
         }
         InsertRes::OutOfSpace
@@ -115,7 +115,7 @@ impl Bucket {
         &mut self,
         cl_store: &mut ClStore,
         bucket_key: InBktKey,
-        key_reminder: &KeyReminder,
+        key_reminder: KeyReminder,
     ) -> FindRes {
         let mut cl = self.head;
         while cl != CacheLine::INVALID_CL {
@@ -137,11 +137,11 @@ impl Bucket {
         &mut self,
         cl_store: &mut ClStore,
         bucket_key: InBktKey,
-        key_reminder: &KeyReminder,
+        key_reminder: KeyReminder,
     ) -> FindRes {
         let mut cl = self.head;
         while cl != CacheLine::INVALID_CL {
-            let cl_info = cl_store.get_cl_w_store(cl);
+            let cl_info = cl_store.get_mut_cl_w_store(cl);
             let res = cl_info
                 .0
                 .unwrap()

@@ -81,7 +81,7 @@ fn main() {
                 ((*k as usize) + 0xffff66677).to_string().as_bytes(),
                 None,
                 *k,
-                &Some(*((*k as usize) + 0xffff66677).to_string().as_bytes()),
+                Some(((*k as usize) + 0xffff66677).to_string().as_bytes()),
                 *v,
                 false,
                 Some(free_cl),
@@ -106,7 +106,7 @@ fn main() {
         match bucket.get(
             &mut cl_store,
             *k,
-            &Some(*((*k as usize) + 0xffff66677).to_string().as_bytes()),
+            Some(((*k as usize) + 0xffff66677).to_string().as_bytes()),
         ) {
             FindRes::Found(d) => {
                 println!(
@@ -123,7 +123,7 @@ fn main() {
         match bucket.delete(
             &mut cl_store,
             *k,
-            &Some(*((*k as usize) + 0xffff66677).to_string().as_bytes()),
+            Some(((*k as usize) + 0xffff66677).to_string().as_bytes()),
         ) {
             FindRes::Found(d) => {
                 println!(
@@ -140,7 +140,7 @@ fn main() {
         match bucket.get(
             &mut cl_store,
             *k,
-            &Some(*((*k as usize) + 0xffff66677).to_string().as_bytes()),
+            Some(((*k as usize) + 0xffff66677).to_string().as_bytes()),
         ) {
             FindRes::Found(d) => {
                 println!(
@@ -158,10 +158,10 @@ fn main() {
         .map(|(k, v)| {
             bucket.put(
                 &mut cl_store,
-                ((*k as usize) + 0xffff66677).to_string().as_bytes(),
+                ((*k as usize) + 0xffff666277).to_string().as_bytes(),
                 None,
                 *k,
-                &Some(*((*k as usize) + 0xffff66677).to_string().as_bytes()),
+                Some(((*k as usize) + 0xffff666277).to_string().as_bytes()),
                 *v,
                 false,
                 None,
@@ -177,7 +177,24 @@ fn main() {
         match bucket.get(
             &mut cl_store,
             *k,
-            &Some(*((*k as usize) + 0xffff66677).to_string().as_bytes()),
+            Some(((*k as usize) + 0xffff66677).to_string().as_bytes()),
+        ) {
+            FindRes::Found(d) => {
+                println!(
+                    "key={} value={}: cl {} slot {} data {}",
+                    k, v, d.1, d.0, d.2.value
+                );
+            }
+            FindRes::NotFound => {
+                println!("key={} value={}: didn't find entry", k, v);
+            }
+        }
+    });
+    kv_pairs3.iter().for_each(|(k, v)| {
+        match bucket.get(
+            &mut cl_store,
+            *k,
+            Some(((*k as usize) + 0xffff666277).to_string().as_bytes()),
         ) {
             FindRes::Found(d) => {
                 println!(

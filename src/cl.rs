@@ -1,4 +1,4 @@
-use crate::cl_store::ClIndex;
+use crate::cl_store::{ClIndex, PerClStore};
 use std::borrow::Borrow;
 use std::ops::{BitAnd, BitXorAssign};
 
@@ -110,26 +110,21 @@ impl CacheLine {
     pub fn find_entry(
         &self,
         bucket_key: InBktKey,
-        key_reminder: &KeyReminder,
-        key_reminders: Option<&[KeyReminder]>,
+        key_reminder: KeyReminder,
+        cl_info: &dyn PerClStore,
     ) -> ClFindResult {
         let mut first_empty_slots = CacheLine::INVALID_SLOT;
-        for (i, bktk) in self.bkt_keys.iter().enumerate() {
-            if (self.flags.valid_slots.bitand(1 << i)) != 0 {
+        for (slot, bktk) in self.bkt_keys.iter().enumerate() {
+            if (self.flags.valid_slots.bitand(1 << slot)) != 0 {
                 if *bktk == bucket_key {
-                    let mut rem_cmp = &None;
-                    match key_reminders {
-                        Some(key_reminders) => rem_cmp = &key_reminders[i],
-                        None => (),
-                    }
-                    if *key_reminder == *rem_cmp {
-                        return ClFindResult::FoundWSlot((i as ClSlot, unsafe {
-                            self.entries.get(i).unwrap().data_ent.clone()
+                    if key_reminder.unwrap() == cl_info.get_data(slot).1.unwrap() {
+                        return ClFindResult::FoundWSlot((slot as ClSlot, unsafe {
+                            self.entries.get(slot).unwrap().data_ent.clone()
                         }));
                     }
                 }
             } else if first_empty_slots == CacheLine::INVALID_SLOT {
-                first_empty_slots = i;
+                first_empty_slots = slot;
             }
         }
         ClFindResult::NotFountFreeSlotsAndNext((first_empty_slots, self.next))
@@ -137,10 +132,10 @@ impl CacheLine {
     pub fn remove_entry(
         &mut self,
         bucket_key: InBktKey,
-        key_reminder: &KeyReminder,
-        key_reminders: Option<&[KeyReminder]>,
+        key_reminder: KeyReminder,
+        cl_info: &dyn PerClStore,
     ) -> ClFindResult {
-        let res = self.find_entry(bucket_key, key_reminder, key_reminders);
+        let res = self.find_entry(bucket_key, key_reminder, cl_info);
         match res.borrow() {
             ClFindResult::FoundWSlot((slot, _entry)) => {
                 self.flags.valid_slots.bitxor_assign(1 << slot)
