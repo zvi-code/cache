@@ -1,6 +1,6 @@
+use crate::cl_store::ClIndex;
 use std::borrow::Borrow;
 use std::ops::{BitAnd, BitXorAssign};
-use crate::cl_store::ClIndex;
 
 pub type ClValidSlotsMask = u8;
 
@@ -8,7 +8,7 @@ pub type ClSlot = usize;
 pub type ValueType = u32;
 pub type InBktKey = u16;
 
-pub type KeyReminder = Option<Vec<u8>>;
+pub type KeyReminder<'a> = Option<&'a [u8]>;
 
 //#[bitfield]
 #[repr(C, align(4))]
@@ -45,7 +45,6 @@ pub struct CacheLine {
     next: ClIndex,
 }
 // use bitmask_enum::bitmask;
-
 
 // #[bitmask(u8)]
 
@@ -104,8 +103,8 @@ impl CacheLine {
         self.flags.valid_slots.bitxor_assign(1 << offset);
         // unsafe {
         ent.data_ent.value = value; //u32::from_be_bytes(*value[0..4]);
-        // }
-        // ent
+                                    // }
+                                    // ent
     }
     // it is assumed that either key reminder exists or not
     pub fn find_entry(

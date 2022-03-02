@@ -65,7 +65,7 @@ impl PerClStore for PerClVecMemStore {
         match id {
             Some(id) => {
                 if slot > self.ids.len() - 1 {
-                    self.ids.resize(len + 1, vec![]);
+                    self.ids.resize(slot + 1, vec![]);
                 }
                 self.ids[slot] = id.to_vec();
             }
@@ -78,7 +78,7 @@ impl PerClStore for PerClVecMemStore {
         match k_rem {
             Some(k_rem) => {
                 if slot > self.k_rems.len() - 1 {
-                    self.k_rems.resize(len + 1, vec![]);
+                    self.k_rems.resize(slot + 1, vec![]);
                 }
                 self.k_rems[slot] = k_rem.to_vec();
             }
@@ -91,7 +91,7 @@ impl PerClStore for PerClVecMemStore {
         match val_rem {
             Some(val_rem) => {
                 if slot > self.v_s.len() - 1 {
-                    self.v_s.resize(len + 1, vec![]);
+                    self.v_s.resize(slot + 1, vec![]);
                 }
                 self.v_s[slot] = val_rem.to_vec();
             }
@@ -190,7 +190,16 @@ impl ClStore {
     pub fn get_cl(&mut self, cl_ix: ClIndex) -> &Option<CacheLine> {
         &self.cls.get(cl_ix)
     }
-    pub fn get_cl_w_store(&mut self, cl_ix: ClIndex) -> (&Option<CacheLine>, &Option<PerClStore>) {
-        (&self.cls.get(cl_ix), &self.cls_store.get(cl_ix))
+    pub fn get_cl_w_store(
+        &mut self,
+        cl_ix: ClIndex,
+    ) -> (Option<&CacheLine>, Option<&dyn PerClStore>) {
+        (self.cls.get(cl_ix), self.cls_store.get(cl_ix))
+    }
+    pub fn get_mut_cl_w_store(
+        &mut self,
+        cl_ix: ClIndex,
+    ) -> (Option<&mut CacheLine>, Option<&mut dyn PerClStore>) {
+        (self.cls.get_mut(cl_ix), self.cls_store.get_mut(cl_ix))
     }
 }
