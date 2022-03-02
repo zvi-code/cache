@@ -43,6 +43,7 @@ impl Cache {
         cache.next_free_cl = cache.cl_store.allocate_cl();
         cache
     }
+    #[inline(always)]
     fn get_bucket_id(&self, id: &[u8]) -> (IBktId, InBktKey, u128) {
         let hash = murmur3_x86_128(&mut id.clone(), 0).unwrap();
         (
@@ -58,18 +59,19 @@ impl Cache {
     pub fn upsert(&mut self, key: &[u8], value: &[u8]) -> bool {
         let (bucket_id, bkt_key, h) = self.get_bucket_id(key);
         //lock bucket
+        let mut num_inline_value_bytes = value.len();
+        if num_inline_value_bytes > self.inline_val_num_bytes as usize {
+            num_inline_value_bytes = self.inline_val_num_bytes as usize;
+        }
+        let mut inline_val: ValueType = [0_u8; CacheLine::NUM_BYTES_INLINE_VAL];
+        (0..num_inline_value_bytes).for_each(|i| inline_val[i] = value[i]);
         let res = self.buckets[bucket_id].put(
             &mut self.cl_store,
             key,
             Some(value),
             bkt_key,
             Some(&h.to_be_bytes()),
-            ValueType::from_be_bytes(
-                ///todo handle shorter value
-                (&value[0..self.inline_val_num_bytes as usize])
-                    .try_into()
-                    .unwrap(),
-            ),
+            inline_val,
             false,
             Some(self.next_free_cl),
         );
@@ -91,17 +93,8 @@ impl Cache {
         //need to add id to get, can't rely on hash
         let res = self.buckets[bucket_id].get(&mut self.cl_store, bkt_key, Some(&h.to_be_bytes()));
         match res {
-            FindRes::Found(d) => {
-                // println!(
-                //     "Get: key={:?}: cl {} slot {} data {}",
-                //     key, d.1, d.0, d.2.value
-                // );
-                Some(d.2.value.to_be_bytes().to_vec())
-            }
-            FindRes::NotFound => {
-                // println!("Get: key={:?}: didn't find entry", key);
-                None
-            }
+            FindRes::Found(d) => Some(d.2.value.to_vec()),
+            FindRes::NotFound => None,
         }
     }
 }

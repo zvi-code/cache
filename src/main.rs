@@ -5,13 +5,14 @@ mod cl_store;
 
 // use std::arch::x86_64::{_mm256_cmpeq_epi16, _mm256_shuffle_epi8, _mm_crc32_u64, _mm_sha1msg1_epu32};
 use std::borrow::Borrow;
+use std::cmp::min;
 use std::mem::size_of_val;
 // use std::collections::{HashMap, HashSet, VecDeque};
 // use std::error::Error;
 // use std::intrinsics::offset;
 use crate::bucket::{Bucket, FindRes, InsertRes};
 use crate::cache::Cache;
-use crate::cl::CacheLine;
+use crate::cl::{CacheLine, ValueType};
 use crate::cl_store::ClStore;
 // use std::ptr::hash;
 // use modular_bitfield::prelude::*;
@@ -37,7 +38,7 @@ fn main() {
     let mut cl_store = ClStore::new(7);
     let mut bucket = Bucket::new();
     let mut cache = Cache::new(2, 1024);
-    cache.upsert("my paycheck".as_ref(), "aaaaa".as_ref());
+    cache.upsert("my paycheck".as_ref(), "a".as_ref());
     let res = cache.get("my paycheck".as_ref());
     match res {
         Some(resp) => println!("asked: my paycheck answered: {:?}", resp),
@@ -83,13 +84,17 @@ fn main() {
     let insert_res = kv_pairs
         .iter()
         .map(|(k, v)| {
+            let mut inline_val: ValueType = [0_u8; CacheLine::NUM_BYTES_INLINE_VAL];
+            let val = v.to_string();
+            (0..(min(val.len(), CacheLine::NUM_BYTES_INLINE_VAL)))
+                .for_each(|i| inline_val[i] = val.as_bytes()[i]);
             let res = bucket.put(
                 &mut cl_store,
                 ((*k as usize) + 0xffff66677).to_string().as_bytes(),
                 None,
                 *k,
                 Some(((*k as usize) + 0xffff66677).to_string().as_bytes()),
-                *v,
+                inline_val,
                 false,
                 Some(free_cl),
             );
@@ -117,7 +122,7 @@ fn main() {
         ) {
             FindRes::Found(d) => {
                 println!(
-                    "Get: key={} value={}: cl {} slot {} data {}",
+                    "Get: key={} value={}: cl {} slot {} data {:?}",
                     k, v, d.1, d.0, d.2.value
                 );
             }
@@ -134,7 +139,7 @@ fn main() {
         ) {
             FindRes::Found(d) => {
                 println!(
-                    "Delete: key={} value={}: cl {} slot {} data {}",
+                    "Delete: key={} value={}: cl {} slot {} data {:?}",
                     k, v, d.1, d.0, d.2.value
                 );
             }
@@ -151,7 +156,7 @@ fn main() {
         ) {
             FindRes::Found(d) => {
                 println!(
-                    "key={} value={}: cl {} slot {} data {}",
+                    "key={} value={}: cl {} slot {} data {:?}",
                     k, v, d.1, d.0, d.2.value
                 );
             }
@@ -163,13 +168,17 @@ fn main() {
     let insert_res3 = kv_pairs3
         .iter()
         .map(|(k, v)| {
+            let mut inline_val: ValueType = [0_u8; CacheLine::NUM_BYTES_INLINE_VAL];
+            let val = v.to_string();
+            (0..(min(val.len(), CacheLine::NUM_BYTES_INLINE_VAL)))
+                .for_each(|i| inline_val[i] = val.as_bytes()[i]);
             bucket.put(
                 &mut cl_store,
                 ((*k as usize) + 0xffff666277).to_string().as_bytes(),
                 None,
                 *k,
                 Some(((*k as usize) + 0xffff666277).to_string().as_bytes()),
-                *v,
+                inline_val,
                 false,
                 None,
             )
@@ -188,7 +197,7 @@ fn main() {
         ) {
             FindRes::Found(d) => {
                 println!(
-                    "key={} value={}: cl {} slot {} data {}",
+                    "key={} value={}: cl {} slot {} data {:?}",
                     k, v, d.1, d.0, d.2.value
                 );
             }
@@ -205,7 +214,7 @@ fn main() {
         ) {
             FindRes::Found(d) => {
                 println!(
-                    "key={} value={}: cl {} slot {} data {}",
+                    "key={} value={}: cl {} slot {} data {:?}",
                     k, v, d.1, d.0, d.2.value
                 );
             }
