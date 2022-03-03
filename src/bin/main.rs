@@ -1,19 +1,15 @@
-mod bucket;
-mod cache;
-mod cl;
-mod cl_store;
-
 // use std::arch::x86_64::{_mm256_cmpeq_epi16, _mm256_shuffle_epi8, _mm_crc32_u64, _mm_sha1msg1_epu32};
+use cache_proj::cache::bucket::{Bucket, FindRes, InsertRes};
+use cache_proj::cache::cache::Cache;
+use cache_proj::cache::cl::{CacheLine, ValueType};
+use cache_proj::cache::cl_store::ClStore;
 use std::borrow::Borrow;
 use std::cmp::min;
 use std::mem::size_of_val;
 // use std::collections::{HashMap, HashSet, VecDeque};
 // use std::error::Error;
 // use std::intrinsics::offset;
-use crate::bucket::{Bucket, FindRes, InsertRes};
-use crate::cache::Cache;
-use crate::cl::{CacheLine, ValueType};
-use crate::cl_store::ClStore;
+
 // use std::ptr::hash;
 // use modular_bitfield::prelude::*;
 
@@ -38,6 +34,7 @@ fn main() {
     let mut cl_store = ClStore::new(7);
     let mut bucket = Bucket::new();
     let mut cache = Cache::new(2, 1024);
+
     cache.upsert("my paycheck".as_ref(), "a".as_ref());
     let res = cache.get("my paycheck".as_ref());
     match res {

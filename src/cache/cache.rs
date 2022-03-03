@@ -1,6 +1,6 @@
-use crate::cl::{InBktKey, ValueType};
-use crate::cl_store::ClIndex;
-use crate::{Bucket, CacheLine, ClStore, FindRes, InsertRes};
+use crate::cache::bucket::{Bucket, FindRes, InsertRes};
+use crate::cache::cl::{CacheLine, InBktKey, ValueType};
+use crate::cache::cl_store::{ClIndex, ClStore};
 use murmur3::murmur3_x86_128;
 use std::borrow::Borrow;
 
