@@ -2,9 +2,9 @@
 exclude-files=[
 #    "bench/*",
 #    "build.rs",
-    "src/main.rs",
+    "src/bin/main.rs",
 #    "test/**/*",
-#    "mod.rs"
+    "mod.rs"
 ]
 fail-under=70
 no-fail-fast=true

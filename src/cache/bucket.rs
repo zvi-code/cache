@@ -1,8 +1,7 @@
-use crate::cl::{
+use crate::cache::cl::{
     CacheDataEntry, CacheLine, ClFindResult, ClSlot, InBktKey, KeyReminder, ValueType,
 };
-use crate::cl_store::ClIndex;
-use crate::ClStore;
+use crate::cache::cl_store::{ClIndex, ClStore};
 
 #[repr(C, align(64))]
 pub struct Bucket {

@@ -1,6 +1,4 @@
-use crate::cl::ClSlot;
-use crate::CacheLine;
-// use plotters::coord::ranged1d::ReversibleRanged;
+use crate::cache::cl::{CacheLine, ClSlot};
 use roaring::RoaringBitmap;
 
 /// Store data associated to the entry in the corresponding cl

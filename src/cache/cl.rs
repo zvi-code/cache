@@ -1,4 +1,4 @@
-use crate::cl_store::{ClIndex, PerClStore};
+use crate::cache::cl_store::{ClIndex, PerClStore};
 use std::borrow::Borrow;
 use std::ops::{BitAnd, BitXorAssign};
 
