@@ -7,6 +7,8 @@ use crate::ClStore;
 #[repr(C, align(64))]
 pub struct Bucket {
     pub head: ClIndex,
+    pub curr_first_tms: u16,
+    pub curr_last_tms: u16,
     // bloom_filter: [u8]
     // free entries list
     // num cl's
@@ -38,6 +40,8 @@ impl Bucket {
     pub fn new() -> Bucket {
         Bucket {
             head: CacheLine::INVALID_CL,
+            curr_first_tms: 0,
+            curr_last_tms: 0,
         }
     }
     pub fn put(
@@ -112,8 +116,8 @@ impl Bucket {
         InsertRes::OutOfSpace
     }
     pub fn get(
-        &mut self,
-        cl_store: &mut ClStore,
+        &self,
+        cl_store: &ClStore,
         bucket_key: InBktKey,
         key_reminder: KeyReminder,
     ) -> FindRes {
@@ -155,4 +159,6 @@ impl Bucket {
         }
         FindRes::NotFound
     }
+    //report capacity usage, entries+store info, on low usage migh get response to reduce quota
+    //provide hit info and request capacity quota, calculate efficiency
 }

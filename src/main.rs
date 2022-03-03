@@ -38,6 +38,7 @@ fn main() {
     let mut cl_store = ClStore::new(7);
     let mut bucket = Bucket::new();
     let mut cache = Cache::new(2, 1024);
+
     cache.upsert("my paycheck".as_ref(), "a".as_ref());
     let res = cache.get("my paycheck".as_ref());
     match res {

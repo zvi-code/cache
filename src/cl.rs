@@ -118,20 +118,32 @@ impl CacheLine {
         cl_info: &dyn PerClStore,
     ) -> ClFindResult {
         let mut first_empty_slots = CacheLine::INVALID_SLOT;
-        for (slot, bktk) in self.bkt_keys.iter().enumerate() {
-            if (self.flags.valid_slots.bitand(1 << slot)) != 0 {
-                if *bktk == bucket_key {
-                    if key_reminder.unwrap() == cl_info.get_key_rem(slot).unwrap() {
-                        return ClFindResult::FoundWSlot((slot as ClSlot, unsafe {
-                            self.entries.get(slot).unwrap().data_ent.clone()
-                        }));
+        match self.bkt_keys.iter().enumerate().find(|(slot, &bktk)| {
+            if bktk == bucket_key && key_reminder.unwrap() == cl_info.get_key_rem(*slot).unwrap() {
+                if (self.flags.valid_slots.bitand(1 << *slot)) != 0 {
+                    true
+                } else {
+                    if first_empty_slots == CacheLine::INVALID_SLOT {
+                        first_empty_slots = *slot;
                     }
+                    false
                 }
-            } else if first_empty_slots == CacheLine::INVALID_SLOT {
-                first_empty_slots = slot;
+            } else {
+                if self.flags.valid_slots.bitand(1 << *slot) == 0
+                    && first_empty_slots == CacheLine::INVALID_SLOT
+                {
+                    first_empty_slots = *slot;
+                }
+                false
             }
+        }) {
+            Some((slot, _)) => {
+                return ClFindResult::FoundWSlot((slot as ClSlot, unsafe {
+                    self.entries.get(slot).unwrap().data_ent.clone()
+                }))
+            }
+            None => ClFindResult::NotFountFreeSlotsAndNext((first_empty_slots, self.next)),
         }
-        ClFindResult::NotFountFreeSlotsAndNext((first_empty_slots, self.next))
     }
     pub fn remove_entry(
         &mut self,
