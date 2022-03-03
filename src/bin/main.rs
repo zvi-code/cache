@@ -3,6 +3,8 @@ use cache_proj::cache::bucket::{Bucket, FindRes, InsertRes};
 use cache_proj::cache::cache::Cache;
 use cache_proj::cache::cl::{CacheLine, ValueType};
 use cache_proj::cache::cl_store::ClStore;
+use rand::prelude::SliceRandom;
+use rand::thread_rng;
 use std::borrow::Borrow;
 use std::cmp::min;
 use std::mem::size_of_val;
@@ -35,6 +37,43 @@ fn main() {
     let mut bucket = Bucket::new();
     let mut cache = Cache::new(2, 1024);
 
+    let mut ids = vec![0_usize; 1000000];
+    let mut i = 0;
+    ids.fill_with(|| {
+        i += 1;
+        i
+    });
+    let mut rng = thread_rng();
+    ids.shuffle(&mut rng);
+    let mut vector = vec![0_u32; 1000000];
+
+    for i in 0..1000000 {
+        vector[i] = rand::random::<u32>() + 1000;
+    }
+    ids.iter().zip(vector.iter()).for_each(|(&k, &v)| {
+        let res = cache.upsert(
+            format!("the key {}", k).as_bytes(),
+            format!("{}", v).as_bytes(),
+        );
+        if !res {
+            println!("Failed write Key {:?}: Asked {:?}", k, v);
+        }
+    });
+    ids.iter().zip(vector.iter()).for_each(|(&k, &v)| {
+        cache.upsert(
+            format!("the key {}", k).as_bytes(),
+            format!("{}", v).as_bytes(),
+        );
+        let res = cache.get(format!("the key {}", k).as_bytes());
+        match res {
+            Some(resp) => {
+                if resp.as_slice()[0..4] != format!("{}", v).as_bytes()[0..4] {
+                    println!("Key {:?}: Got {:?} Asked {:?}", k, resp, v);
+                }
+            }
+            None => println!("Didn't find Key {:?}: Asked {:?}", k, v),
+        }
+    });
     cache.upsert("my paycheck".as_ref(), "a".as_ref());
     let res = cache.get("my paycheck".as_ref());
     match res {

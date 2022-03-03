@@ -119,8 +119,13 @@ impl CacheLine {
     ) -> ClFindResult {
         let mut first_empty_slots = CacheLine::INVALID_SLOT;
         match self.bkt_keys.iter().enumerate().find(|(slot, &bktk)| {
-            if bktk == bucket_key && key_reminder.unwrap() == cl_info.get_key_rem(*slot).unwrap() {
-                if (self.flags.valid_slots.bitand(1 << *slot)) != 0 {
+            if bktk == bucket_key {
+                if (self.flags.valid_slots.bitand(1 << *slot)) != 0
+                    && cl_info
+                        .get_key_rem(*slot)
+                        .unwrap_or_else(|| "".as_bytes())
+                        .eq(key_reminder.unwrap())
+                {
                     true
                 } else {
                     if first_empty_slots == CacheLine::INVALID_SLOT {
