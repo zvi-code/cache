@@ -1,5 +1,5 @@
 use crate::cache::bucket::{Bucket, FindRes, InsertRes};
-use crate::cache::cl::{CacheLine, InBktKey, ValueType};
+use crate::cache::cl::{CacheLine, InBktKey};
 use crate::cache::cl_store::{ClIndex, ClStore};
 use murmur3::murmur3_x86_128;
 use std::borrow::Borrow;
@@ -56,6 +56,11 @@ impl Cache {
             hash,
         )
     }
+    pub fn print_bucket(&mut self, key: &[u8]) -> IBktId {
+        let (bucket_id, bkt_key, h) = self.get_bucket_id(key);
+        self.buckets[bucket_id].print(&self.cl_store);
+        bucket_id
+    }
     pub fn upsert(&mut self, key: &[u8], value: &[u8]) -> bool {
         let (bucket_id, bkt_key, h) = self.get_bucket_id(key);
         //lock bucket
@@ -63,15 +68,13 @@ impl Cache {
         if num_inline_value_bytes > self.inline_val_num_bytes as usize {
             num_inline_value_bytes = self.inline_val_num_bytes as usize;
         }
-        let mut inline_val: ValueType = [0_u8; CacheLine::NUM_BYTES_INLINE_VAL];
-        (0..num_inline_value_bytes).for_each(|i| inline_val[i] = value[i]);
         let res = self.buckets[bucket_id].put(
             &mut self.cl_store,
             key,
             Some(value),
             bkt_key,
             Some(&h.to_be_bytes()),
-            inline_val,
+            &value[0..num_inline_value_bytes],
             false,
             Some(self.next_free_cl),
         );
