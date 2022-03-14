@@ -13,7 +13,7 @@ tonic = "0.6"
 tonic-health = "0.5"
 tokio = { version = "1.16.1", features = ["macros", "rt-multi-thread", "time"] }
 tokio-stream = "0.1.8"
-hdf5 = {version = "0.8.0"}
+#hdf5 = {version = "0.8.0"}
 sys-info = "0.9"
 tokio-util = "0.6.9"
 rand = "0.8.4"
