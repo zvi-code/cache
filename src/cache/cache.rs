@@ -1,12 +1,12 @@
 use crate::cache::bucket::{Bucket, FindRes, InBktKey, InsertRes};
-use crate::cache::cl::{CacheLine, TCacheLine};
+use crate::cache::cl::{CacheLine, CacheLine64};
 use crate::cache::cl_store::{ClIndex, ClStore};
 use murmur3::murmur3_x86_128;
 use std::borrow::Borrow;
 
 pub type IBktId = usize;
 #[allow(unused)]
-pub struct Cache<C: TCacheLine> {
+pub struct Cache<C: CacheLine> {
     buckets: Vec<Bucket>,
     cl_store: ClStore<C>,
     next_free_cl: ClIndex,
@@ -18,17 +18,17 @@ pub struct Cache<C: TCacheLine> {
     total_capacity: u32,
 }
 #[allow(unused)]
-impl<C: TCacheLine> Cache<C> {
+impl<C: CacheLine> Cache<C> {
     pub fn new(bytes_for_bucket_id: usize, capacity: u32) -> Cache<C> {
         let mut cache = Cache {
             buckets: vec![],
-            cl_store: ClStore::new(7),
-            next_free_cl: CacheLine::INVALID_CL,
+            cl_store: ClStore::new(CacheLine64::NUM_SLOTS as u16),
+            next_free_cl: CacheLine64::INVALID_CL,
             num_buckets: 1 << (bytes_for_bucket_id * 8),
             buckets_mask: 0,
             bytes_for_bucket_id,
-            inline_val_num_bytes: 4,
-            inline_key_num_bytes: 2,
+            inline_val_num_bytes: CacheLine64::NUM_BYTES_INLINE_VAL as u32,
+            inline_key_num_bytes: CacheLine64::NUM_BYTES_PER_ENTRY_KEY as u32,
             total_capacity: capacity,
         };
         (0..bytes_for_bucket_id).for_each(|_| {
@@ -36,7 +36,7 @@ impl<C: TCacheLine> Cache<C> {
             cache.buckets_mask |= 0xff;
         });
         (0..cache.num_buckets).for_each(|_| {
-            let mut bkt = Bucket::new::<CacheLine>();
+            let mut bkt = Bucket::new::<CacheLine64>();
             bkt.head = cache.cl_store.allocate_cl();
             cache.buckets.push(bkt)
         });
@@ -79,7 +79,7 @@ impl<C: TCacheLine> Cache<C> {
             Some(self.next_free_cl),
         );
         match res.borrow() {
-            InsertRes::Success(cl) => {
+            InsertRes::Success((cl, slot)) => {
                 if *cl == self.next_free_cl {
                     self.next_free_cl = self.cl_store.allocate_cl();
                 }

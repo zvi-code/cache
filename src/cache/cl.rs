@@ -28,13 +28,13 @@ pub trait TCacheEntry {
     fn get_value(&self, slot: ClSlot) -> ValueType;
     fn get_raw(&self, slot: ClSlot) -> Vec<u8>;
 }
-pub trait TCacheLine {
+pub trait CacheLine {
     const INVALID_CL: u32;
-    const INVALID_SLOT: usize = 7;
-    const NUM_SLOTS: usize = 7;
-    const SLOTS_MASK: u8 = (1 << 7) - 1;
-    const NUM_BYTES_INLINE_VAL: usize = 4;
-
+    const INVALID_SLOT: usize;
+    const NUM_SLOTS: usize;
+    const SLOTS_MASK: u8;
+    const NUM_BYTES_INLINE_VAL: usize;
+    const NUM_BYTES_PER_ENTRY_KEY: usize;
     fn new() -> Self;
     fn new_with_entry(bucket_key: InBktKey, value: &ValueType) -> Self;
     fn set_next_cl(&mut self, next_cl: ClIndex) -> Option<ClIndex>;
@@ -59,12 +59,12 @@ pub struct WriteClFindResult {
 #[repr(C, align(4))]
 #[derive(Clone, Copy, Debug)]
 pub struct CacheDataEntry {
-    pub value: [u8; CacheLine::NUM_BYTES_INLINE_VAL],
+    pub value: [u8; CacheLine64::NUM_BYTES_INLINE_VAL],
 }
 #[repr(C, align(4))]
 #[derive(Clone, Copy, Debug)]
 pub struct CacheMetaEntry {
-    blob: [u8; CacheLine::NUM_BYTES_INLINE_VAL],
+    blob: [u8; CacheLine64::NUM_BYTES_INLINE_VAL],
 }
 //#[derive(BitfieldSpecifier)]
 #[repr(C, align(4))]
@@ -89,10 +89,10 @@ pub struct CLFlags {
 }
 #[repr(C, align(64))]
 // #[derive(Clone, Debug)]
-pub struct CacheLine {
+pub struct CacheLine64 {
     flags: CLFlags,
-    entries: [CacheEntry; CacheLine::NUM_SLOTS],
-    bkt_keys: [InBktKey; CacheLine::NUM_SLOTS],
+    entries: [CacheEntry; CacheLine64::NUM_SLOTS],
+    bkt_keys: [InBktKey; CacheLine64::NUM_SLOTS],
     next: ClIndex,
 }
 // use bitmask_enum::bitmask;
@@ -105,7 +105,7 @@ pub struct CacheLine {
 //     AllocatedSlot(ClSlot),
 // }
 
-impl Display for CacheLine {
+impl Display for CacheLine64 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -121,55 +121,32 @@ impl Display for CacheLine {
         write!(f, "\n")
     }
 }
-// #[allow(dead_code)]
-// impl CacheLine {
-//     pub fn new() -> CacheLine {
-//         CacheLine {
-//             entries: [CacheEntry {
-//                 data_ent: CacheDataEntry {
-//                     value: [0, 0, 0, 0],
-//                 },
-//             }; CacheLine::NUM_SLOTS],
-//             flags: CLFlags {
-//                 valid_slots: 0x0,
-//                 flags1: 0,
-//                 flags2: 0,
-//             },
-//             next: CacheLine::INVALID_CL,
-//             bkt_keys: [0; CacheLine::NUM_SLOTS],
-//         }
-//     }
-//     pub fn new_with_entry(bucket_key: InBktKey, value: &ValueType) -> CacheLine {
-//         let mut cl = CacheLine::new();
-//         cl.set_entry(0, bucket_key, value);
-//         cl
-//     }
-// }
 
-impl TCacheLine for CacheLine {
+impl CacheLine for CacheLine64 {
     const INVALID_CL: u32 = u32::MAX as u32;
     const INVALID_SLOT: usize = 7;
     const NUM_SLOTS: usize = 7;
     const SLOTS_MASK: u8 = (1 << 7) - 1;
     const NUM_BYTES_INLINE_VAL: usize = 4;
-    fn new() -> CacheLine {
-        CacheLine {
+    const NUM_BYTES_PER_ENTRY_KEY: usize = 2;
+    fn new() -> CacheLine64 {
+        CacheLine64 {
             entries: [CacheEntry {
                 data_ent: CacheDataEntry {
                     value: [0, 0, 0, 0],
                 },
-            }; CacheLine::NUM_SLOTS],
+            }; CacheLine64::NUM_SLOTS],
             flags: CLFlags {
                 valid_slots: 0x0,
                 flags1: 0,
                 flags2: 0,
             },
-            next: CacheLine::INVALID_CL,
-            bkt_keys: [0; CacheLine::NUM_SLOTS],
+            next: CacheLine64::INVALID_CL,
+            bkt_keys: [0; CacheLine64::NUM_SLOTS],
         }
     }
-    fn new_with_entry(bucket_key: InBktKey, value: &ValueType) -> CacheLine {
-        let mut cl = CacheLine::new();
+    fn new_with_entry(bucket_key: InBktKey, value: &ValueType) -> CacheLine64 {
+        let mut cl = CacheLine64::new();
         cl.set_entry(0, bucket_key, value);
         cl
     }
@@ -178,7 +155,7 @@ impl TCacheLine for CacheLine {
         let old_next = self.next;
         self.next = next_cl;
         match old_next {
-            CacheLine::INVALID_CL => None,
+            CacheLine64::INVALID_CL => None,
             next => Some(next),
         }
     }
@@ -206,7 +183,7 @@ impl TCacheLine for CacheLine {
         let bkt_key_ptr: &mut InBktKey = self.bkt_keys.get_mut(offset).unwrap();
         *bkt_key_ptr = bucket_key;
         self.flags.valid_slots.bitxor_assign(1 << offset);
-        let cp_len = min(CacheLine::NUM_BYTES_INLINE_VAL, value.len());
+        let cp_len = min(CacheLine64::NUM_BYTES_INLINE_VAL, value.len());
         unsafe {
             ent.data_ent.value[0..cp_len].copy_from_slice(&value[0..cp_len]);
         }
@@ -239,38 +216,37 @@ impl TCacheLine for CacheLine {
         found_slot.bitxor_assign(self.flags.valid_slots);
         WriteClFindResult {
             condid: found_slot,
-            free: CacheLine::SLOTS_MASK.bitxor(self.flags.valid_slots),
+            free: CacheLine64::SLOTS_MASK.bitxor(self.flags.valid_slots),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::cache::cl::CacheLine;
-    use crate::cache::cl_store::TCacheLine;
+    use crate::cache::cl::{CacheLine, CacheLine64};
 
     #[test]
     fn test_cl() {
-        let value = (0..CacheLine::NUM_BYTES_INLINE_VAL * CacheLine::NUM_SLOTS)
+        let value = (0..CacheLine64::NUM_BYTES_INLINE_VAL * CacheLine64::NUM_SLOTS)
             .into_iter()
             .map(|i| ((i * 11 % 255 + 7) % 255) as u8)
             .collect::<Vec<u8>>();
         //insert entries to cl
-        let mut cl_test = CacheLine::new();
-        assert_eq!(cl_test.get_next_cl(), CacheLine::INVALID_CL);
-        cl_test.set_entry(0, 12, &value[0..CacheLine::NUM_BYTES_INLINE_VAL]);
+        let mut cl_test = CacheLine64::new();
+        assert_eq!(cl_test.get_next_cl(), CacheLine64::INVALID_CL);
+        cl_test.set_entry(0, 12, &value[0..CacheLine64::NUM_BYTES_INLINE_VAL]);
         assert_eq!(cl_test.find_entry_for_read(12).condid, 0x1);
-        cl_test.set_entry(1, 11, &value[0..CacheLine::NUM_BYTES_INLINE_VAL]);
+        cl_test.set_entry(1, 11, &value[0..CacheLine64::NUM_BYTES_INLINE_VAL]);
         assert_eq!(cl_test.find_entry_for_read(11).condid, 0x1 << 1);
         //remove entry at slot 0
         assert_eq!(cl_test.clear_entry(0), true);
         //expect to not find any cond
         assert_eq!(cl_test.find_entry_for_read(12).condid, 0);
-        cl_test.set_entry(0, 12, &value[0..CacheLine::NUM_BYTES_INLINE_VAL]);
-        cl_test.set_entry(2, 12, &value[0..CacheLine::NUM_BYTES_INLINE_VAL]);
-        cl_test.set_entry(3, 11, &value[0..CacheLine::NUM_BYTES_INLINE_VAL]);
+        cl_test.set_entry(0, 12, &value[0..CacheLine64::NUM_BYTES_INLINE_VAL]);
+        cl_test.set_entry(2, 12, &value[0..CacheLine64::NUM_BYTES_INLINE_VAL]);
+        cl_test.set_entry(3, 11, &value[0..CacheLine64::NUM_BYTES_INLINE_VAL]);
 
-        cl_test.set_entry(4, 12, &value[0..CacheLine::NUM_BYTES_INLINE_VAL]);
+        cl_test.set_entry(4, 12, &value[0..CacheLine64::NUM_BYTES_INLINE_VAL]);
         assert_eq!(cl_test.find_entry_for_read(12).condid, 1 | 1 << 2 | 1 << 4);
         assert_eq!(cl_test.find_entry_for_read(11).condid, 1 << 1 | 1 << 3);
         //get entries in cl

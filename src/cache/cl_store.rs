@@ -1,4 +1,4 @@
-use crate::cache::cl::{ClSlot, TCacheLine};
+use crate::cache::cl::{CacheLine, ClSlot};
 use roaring::RoaringBitmap;
 
 /// Store data associated to the entry in the corresponding cl
@@ -144,14 +144,14 @@ impl PerClStore for PerClVecMemStore {
         }
     }
 }
-pub struct ClStore<C: TCacheLine> {
+pub struct ClStore<C: CacheLine> {
     cls: Vec<C>,
     cls_store: Vec<Option<PerClVecMemStore>>,
     free_cls: RoaringBitmap,
     // n_cl_ents: u16,
 }
 #[allow(unused)]
-impl<C: TCacheLine> ClStore<C> {
+impl<C: CacheLine> ClStore<C> {
     pub fn new(_num_cl_entries: u16) -> ClStore<C> {
         ClStore {
             cls: vec![],

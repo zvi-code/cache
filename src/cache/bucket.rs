@@ -1,4 +1,4 @@
-use crate::cache::cl::{CacheDataEntry, ClCondidSlotsMask, ClSlot, TCacheLine};
+use crate::cache::cl::{CacheDataEntry, CacheLine, ClCondidSlotsMask, ClSlot};
 use crate::cache::cl_store::{ClIndex, ClStore, PerClStore};
 use std::ops::BitAnd;
 
@@ -29,8 +29,8 @@ pub struct Bucket {
 //pub struct
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum InsertRes {
-    EntryExists(u32),
-    Success(u32),
+    EntryExists((u32, u16)),
+    Success((u32, u16)),
     OutOfSpace,
 }
 #[derive(Clone, Debug)]
@@ -39,29 +39,15 @@ pub enum FindRes {
     Found((ClSlot, ClIndex, CacheDataEntry)),
 }
 
-// impl Display for Bucket {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         let mut cl = self.head;
-//         while cl != CacheLine::INVALID_CL {
-//             let cl_info = cl_store.get_cl_w_store(cl);
-//             let res = cl_info
-//                 .0
-//                 .unwrap()
-//         }
-//         write!(
-//             f,
-//             "\n ")
-//     }
-// }
 impl Bucket {
-    pub fn new<C: TCacheLine>() -> Bucket {
+    pub fn new<C: CacheLine>() -> Bucket {
         Bucket {
             head: C::INVALID_CL,
             curr_first_tms: 0,
             curr_last_tms: 0,
         }
     }
-    pub fn put<C: TCacheLine>(
+    pub fn put<C: CacheLine>(
         &mut self,
         cl_store: &mut ClStore<C>,
         id: &[u8],
@@ -72,11 +58,6 @@ impl Bucket {
         _should_evict: bool,
         new_cl: Option<ClIndex>,
     ) -> InsertRes {
-        //get first cl in bucket - if exist
-        //search entry in cl - remember free slots
-        //if not found continue to next cl
-        //if not found insert new entry to free slot or allocate new cl
-        //evict entry if can't allocate any more resources
         let mut cl = self.head;
         let mut cl_to_write = C::INVALID_CL;
         let mut slot_to_write = 0;
@@ -86,7 +67,7 @@ impl Bucket {
             let curr_cl = cl_info.0.unwrap();
             let res = curr_cl.find_entry_for_write(bucket_key);
             match self.check_condid(cl_info.1.unwrap(), key_reminder, res.condid) {
-                Some(_slot) => return InsertRes::EntryExists(cl),
+                Some(slot) => return InsertRes::EntryExists((cl, slot as u16)),
                 None => {
                     cl_tail = cl;
                     if res.free != 0 {
@@ -131,11 +112,11 @@ impl Bucket {
                     .unwrap()
                     .set_next_cl(cl_to_write);
             }
-            return InsertRes::Success(cl_to_write);
+            return InsertRes::Success((cl_to_write, slot as u16));
         }
         InsertRes::OutOfSpace
     }
-    pub fn print<C: TCacheLine>(&self, cl_store: &ClStore<C>) -> () {
+    pub fn print<C: CacheLine>(&self, cl_store: &ClStore<C>) -> () {
         let mut cl = self.head;
         while cl != C::INVALID_CL {
             let clm = cl_store.get_cl_w_store(cl).0.unwrap();
@@ -168,7 +149,7 @@ impl Bucket {
         }
         None
     }
-    pub fn get<C: TCacheLine>(
+    pub fn get<C: CacheLine>(
         &self,
         cl_store: &ClStore<C>,
         bucket_key: InBktKey,
@@ -189,7 +170,7 @@ impl Bucket {
         }
         FindRes::NotFound
     }
-    pub fn delete<C: TCacheLine>(
+    pub fn delete<C: CacheLine>(
         &mut self,
         cl_store: &mut ClStore<C>,
         bucket_key: InBktKey,
