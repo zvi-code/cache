@@ -1,4 +1,4 @@
-use crate::cache::cl::{CacheLine, ClSlot};
+use crate::cache::cl::{ClSlot, TCacheLine};
 use roaring::RoaringBitmap;
 
 /// Store data associated to the entry in the corresponding cl
@@ -144,15 +144,15 @@ impl PerClStore for PerClVecMemStore {
         }
     }
 }
-pub struct ClStore {
-    cls: Vec<CacheLine>,
+pub struct ClStore<C: TCacheLine> {
+    cls: Vec<C>,
     cls_store: Vec<Option<PerClVecMemStore>>,
     free_cls: RoaringBitmap,
     // n_cl_ents: u16,
 }
 #[allow(unused)]
-impl ClStore {
-    pub fn new(_num_cl_entries: u16) -> ClStore {
+impl<C: TCacheLine> ClStore<C> {
+    pub fn new(_num_cl_entries: u16) -> ClStore<C> {
         ClStore {
             cls: vec![],
             free_cls: RoaringBitmap::new(),
@@ -170,7 +170,7 @@ impl ClStore {
                 return cl_ix;
             }
             None => {
-                self.cls.push(CacheLine::new());
+                self.cls.push(C::new());
                 self.cls_store.push(Some(PerClVecMemStore::new()));
                 (self.cls.len() - 1) as ClIndex
             }
@@ -186,11 +186,11 @@ impl ClStore {
         }
     }
     #[inline(always)]
-    pub fn get_cl(&mut self, cl_ix: ClIndex) -> Option<&CacheLine> {
+    pub fn get_cl(&mut self, cl_ix: ClIndex) -> Option<&C> {
         Some(self.cls.get(cl_ix as usize).unwrap())
     }
     #[inline(always)]
-    pub fn get_cl_w_store(&self, cl_ix: ClIndex) -> (Option<&CacheLine>, Option<&dyn PerClStore>) {
+    pub fn get_cl_w_store(&self, cl_ix: ClIndex) -> (Option<&C>, Option<&dyn PerClStore>) {
         (
             self.cls.get(cl_ix as usize),
             match self.cls_store.get(cl_ix as usize).unwrap() {
@@ -203,7 +203,7 @@ impl ClStore {
     pub fn get_mut_cl_w_store(
         &mut self,
         cl_ix: ClIndex,
-    ) -> (Option<&mut CacheLine>, Option<&mut dyn PerClStore>) {
+    ) -> (Option<&mut C>, Option<&mut dyn PerClStore>) {
         (
             self.cls.get_mut(cl_ix as usize),
             match self.cls_store.get_mut(cl_ix as usize).unwrap() {

@@ -1,14 +1,14 @@
-use crate::cache::bucket::{Bucket, FindRes, InsertRes};
-use crate::cache::cl::{CacheLine, InBktKey};
+use crate::cache::bucket::{Bucket, FindRes, InBktKey, InsertRes};
+use crate::cache::cl::{CacheLine, TCacheLine};
 use crate::cache::cl_store::{ClIndex, ClStore};
 use murmur3::murmur3_x86_128;
 use std::borrow::Borrow;
 
 pub type IBktId = usize;
 #[allow(unused)]
-pub struct Cache {
+pub struct Cache<C: TCacheLine> {
     buckets: Vec<Bucket>,
-    cl_store: ClStore,
+    cl_store: ClStore<C>,
     next_free_cl: ClIndex,
     num_buckets: IBktId,
     buckets_mask: u128,
@@ -18,8 +18,8 @@ pub struct Cache {
     total_capacity: u32,
 }
 #[allow(unused)]
-impl Cache {
-    pub fn new(bytes_for_bucket_id: usize, capacity: u32) -> Cache {
+impl<C: TCacheLine> Cache<C> {
+    pub fn new(bytes_for_bucket_id: usize, capacity: u32) -> Cache<C> {
         let mut cache = Cache {
             buckets: vec![],
             cl_store: ClStore::new(7),
@@ -36,7 +36,7 @@ impl Cache {
             cache.buckets_mask |= 0xff;
         });
         (0..cache.num_buckets).for_each(|_| {
-            let mut bkt = Bucket::new();
+            let mut bkt = Bucket::new::<CacheLine>();
             bkt.head = cache.cl_store.allocate_cl();
             cache.buckets.push(bkt)
         });
