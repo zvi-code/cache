@@ -2,6 +2,45 @@ use crate::cache::cl::{CacheDataEntry, CacheLine, ClCondidSlotsMask, ClSlot};
 use crate::cache::cl_store::{ClIndex, ClStore, PerClStore};
 use std::ops::BitAnd;
 
+#[repr(C, align(64))]
+pub struct Utility {
+    pub first_set_bit: [i32; 256],
+    pub last_set_bit: [i32; 256],
+    pub num_set_bits: [u8; 256],
+}
+
+impl Utility {
+    pub fn new() -> Utility {
+        let mut u = Utility {
+            first_set_bit: [-1; 256],
+            last_set_bit: [-1; 256],
+            num_set_bits: [0_u8; 256],
+        };
+        let set_bit: Vec<u8> = (0..8).into_iter().map(|i| 1 << i).collect();
+        for i in 0..256 {
+            for j in 0..8 {
+                if i as u8 & set_bit[j] != 0 {
+                    u.first_set_bit[i] = j as i32;
+                    break;
+                }
+            }
+            for j in 8..0 {
+                if i as u8 & set_bit[j] != 0 {
+                    u.last_set_bit[i] = j as i32;
+                    break;
+                }
+            }
+            u.num_set_bits[i] = match i {
+                0 => 0,
+                i => 1 + u.num_set_bits[i >> (u.first_set_bit[i] + 1)],
+            }
+        }
+        u
+    }
+}
+
+const UTILITY: Utility = Utility::new();
+
 pub type InBktKey = u16;
 pub type ValueType = [u8];
 
@@ -197,4 +236,18 @@ impl Bucket {
     }
     //report capacity usage, entries+store info, on low usage migh get response to reduce quota
     //provide hit info and request capacity quota, calculate efficiency
+}
+#[cfg(test)]
+mod tests {
+    use crate::cache::bucket::Utility;
+
+    #[test]
+    fn test_utility() {
+        let u = Utility::new();
+        assert_eq!(u.first_set_bit[1 << 3], 2);
+        assert_eq!(u.first_set_bit[1 << 7], 6);
+        assert_eq!(u.last_set_bit[1 << 7], 6);
+        assert_eq!(u.num_set_bits[0xff], 8);
+        assert_eq!(u.num_set_bits[1 << 7], 1);
+    }
 }

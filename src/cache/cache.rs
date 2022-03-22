@@ -100,4 +100,22 @@ impl<C: CacheLine> Cache<C> {
             FindRes::NotFound => None,
         }
     }
+    pub fn multi_get(&mut self, keys: &[&[u8]]) -> Vec<Option<Vec<u8>>> {
+        keys.into_iter()
+            .map(|&k| {
+                let (bucket_id, bkt_key, h) = self.get_bucket_id(k);
+                //lock bucket
+                //need to add id to get, can't rely on hash
+                let res = self.buckets[bucket_id].get(
+                    &mut self.cl_store,
+                    bkt_key,
+                    Some(&h.to_be_bytes()),
+                );
+                match res {
+                    FindRes::Found(d) => Some(d.2.value.to_vec()),
+                    FindRes::NotFound => None,
+                }
+            })
+            .collect()
+    }
 }
