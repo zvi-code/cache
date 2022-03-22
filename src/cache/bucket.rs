@@ -1,8 +1,9 @@
 use crate::cache::cl::{CacheDataEntry, CacheLine, ClCondidSlotsMask, ClSlot};
 use crate::cache::cl_store::{ClIndex, ClStore, PerClStore};
+// use std::intrinsics::size_of;
 use std::ops::BitAnd;
-
-#[repr(C, align(64))]
+// use core::mem::size_of;
+// #[repr(C, align(64))]
 pub struct Utility {
     pub first_set_bit: [i32; 256],
     pub last_set_bit: [i32; 256],
@@ -18,28 +19,37 @@ impl Utility {
         };
         let set_bit: Vec<u8> = (0..8).into_iter().map(|i| 1 << i).collect();
         for i in 0..256 {
-            for j in 0..8 {
-                if i as u8 & set_bit[j] != 0 {
-                    u.first_set_bit[i] = j as i32;
-                    break;
-                }
-            }
-            for j in 8..0 {
-                if i as u8 & set_bit[j] != 0 {
-                    u.last_set_bit[i] = j as i32;
-                    break;
-                }
-            }
             u.num_set_bits[i] = match i {
                 0 => 0,
-                i => 1 + u.num_set_bits[i >> (u.first_set_bit[i] + 1)],
+                _ => {
+                    for j in 0..8 {
+                        if i as u8 & set_bit[j] != 0 {
+                            u.first_set_bit[i] = j as i32;
+                            break;
+                        }
+                    }
+                    for j in 0..8 {
+                        if i as u8 & set_bit[7 - j] != 0 {
+                            u.last_set_bit[i] = (7 - j) as i32;
+                            break;
+                        }
+                    }
+                    1 + u.num_set_bits[i >> (u.first_set_bit[i] + 1)]
+                }
             }
         }
         u
     }
+    // pub fn get_first_set<K: Sized>(&self, val: K) -> i32 {
+    //     self.first_set_bit[val as usize]
+    // }
+    // pub fn get_last_set<K: Sized>(&self, val: K) -> i32 {
+    //     self.last_set_bit[val as usize]
+    // }
+    // pub fn get_num_set<K: Sized>(&self, val: K) -> K {
+    //     self.num_set_bits[val as usize]
+    // }
 }
-
-const UTILITY: Utility = Utility::new();
 
 pub type InBktKey = u16;
 pub type ValueType = [u8];
@@ -72,6 +82,7 @@ pub enum InsertRes {
     Success((u32, u16)),
     OutOfSpace,
 }
+
 #[derive(Clone, Debug)]
 pub enum FindRes {
     NotFound,
@@ -244,10 +255,12 @@ mod tests {
     #[test]
     fn test_utility() {
         let u = Utility::new();
-        assert_eq!(u.first_set_bit[1 << 3], 2);
-        assert_eq!(u.first_set_bit[1 << 7], 6);
-        assert_eq!(u.last_set_bit[1 << 7], 6);
+        assert_eq!(u.first_set_bit[1 << 3], 3);
+        assert_eq!(u.first_set_bit[1 << 7], 7);
+        assert_eq!(u.last_set_bit[1 << 7], 7);
         assert_eq!(u.num_set_bits[0xff], 8);
         assert_eq!(u.num_set_bits[1 << 7], 1);
     }
+    #[test]
+    fn test_bucket() {}
 }

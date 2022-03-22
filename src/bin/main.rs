@@ -1,8 +1,8 @@
 // use std::arch::x86_64::{_mm256_cmpeq_epi16, _mm256_shuffle_epi8, _mm_crc32_u64, _mm_sha1msg1_epu32};
-use cache_proj::cache::bucket::{Bucket, FindRes, InsertRes};
-use cache_proj::cache::cache::Cache;
-use cache_proj::cache::cl::{CacheLine, CacheLine64};
-use cache_proj::cache::cl_store::ClStore;
+use cache_db::cache::bucket::{Bucket, FindRes, InsertRes};
+use cache_db::cache::cache::Cache;
+use cache_db::cache::cl::{CacheLine, CacheLine64};
+use cache_db::cache::cl_store::ClStore;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
 use std::borrow::Borrow;

@@ -1,5 +1,5 @@
-use std::io::{BufWriter, Write};
-
+use std::io::BufWriter;
+use std::io::Write;
 /// Trait that defines an indexer. Indexers can be incremental or batch oriented.
 /// An indexer is assumed to deal with fixes size vectors
 pub trait DataLoader<W: Write>: Send + Sync {
@@ -24,7 +24,7 @@ pub trait DataLoader<W: Write>: Send + Sync {
     /// run update randomly on on the given key range. each batch write request has
     /// batch_size vectors. run in loop for num_batch times.
     fn run_overwrite_load(
-        &self,
+        &mut self,
         batch_size: usize,
         num_batch: usize,
         key_range_start: usize,
@@ -37,7 +37,7 @@ pub trait DataLoader<W: Write>: Send + Sync {
     /// batch_size vectors. run in loop for num_loops times. this can be used to measure
     /// sequential access as well as to prehit cache(like a simple iterator)
     fn run_seq_get(
-        &self,
+        &mut self,
         batch_size: usize,
         key_range_start: usize,
         key_range_end: usize,
@@ -49,7 +49,7 @@ pub trait DataLoader<W: Write>: Send + Sync {
     /// run multi-get random load on the given key range. each multi-get request has batch_size vectors.
     /// run in loop for num_loops times
     fn run_get_load(
-        &self,
+        &mut self,
         batch_size: usize,
         num_loops: usize,
         key_range_start: usize,

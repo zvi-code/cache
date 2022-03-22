@@ -100,10 +100,10 @@ impl<C: CacheLine> Cache<C> {
             FindRes::NotFound => None,
         }
     }
-    pub fn multi_get(&mut self, keys: &[&[u8]]) -> Vec<Option<Vec<u8>>> {
+    pub fn multi_get(&mut self, keys: Vec<Vec<u8>>) -> Vec<Option<Vec<u8>>> {
         keys.into_iter()
-            .map(|&k| {
-                let (bucket_id, bkt_key, h) = self.get_bucket_id(k);
+            .map(|k| {
+                let (bucket_id, bkt_key, h) = self.get_bucket_id(k.as_slice());
                 //lock bucket
                 //need to add id to get, can't rely on hash
                 let res = self.buckets[bucket_id].get(
