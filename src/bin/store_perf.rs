@@ -11,6 +11,9 @@ use sys_info::{
     os_release, os_type, proc_total,
 };
 
+const STEPS: usize = 1;
+const BATCH_STEPS: usize = 1;
+
 #[derive(Debug, StructOpt)]
 struct InputOpt {
     #[structopt(long = "dimension", default_value = "768")]
@@ -239,7 +242,7 @@ fn bench_rocks_db_all(user_op: &InputOpt, configs_to_run: Vec<BenchPatams>) {
             &mut writer,
         );
         let load_range = loader.get_range_for_cache_hit_expect(user_op.cache_hit_ratio);
-        for num_vec_f in 0..5 {
+        for num_vec_f in 0..STEPS {
             //run the performance tests
             bench_with_type(
                 &mut loader,
@@ -248,16 +251,16 @@ fn bench_rocks_db_all(user_op: &InputOpt, configs_to_run: Vec<BenchPatams>) {
                 ("_".to_string()).clone(),
                 min(
                     load_range,
-                    ((num_vec_f + 1) * bnanch_params.n_vecs / 5) as u32,
+                    ((num_vec_f + 1) * bnanch_params.n_vecs / STEPS) as u32,
                 ),
-                (num_vec_f + 1) * bnanch_params.n_vecs / 5,
+                (num_vec_f + 1) * bnanch_params.n_vecs / STEPS,
                 &mut writer,
             );
 
             print_memory_usage(
                 format!(
                     "num_vecs={}, vec_size={}",
-                    (num_vec_f + 1) * bnanch_params.n_vecs / 5,
+                    (num_vec_f + 1) * bnanch_params.n_vecs / STEPS,
                     bnanch_params.dim * 4,
                 )
                 .to_string(),
@@ -325,8 +328,8 @@ fn bench_with_type<W: Write + std::marker::Sync + std::marker::Send>(
         ctx.db_write_stats(writer, false);
     }
     let mut num_bad: u32 = 0;
-    for max_res_f in 0..5 {
-        let max_res_now = (max_res_f + 1) * param_of_bench.max_res / 5;
+    for max_res_f in 0..BATCH_STEPS {
+        let max_res_now = (max_res_f + 1) * param_of_bench.max_res / BATCH_STEPS;
         if max_res_now > num_vectors {
             break;
         }

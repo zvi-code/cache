@@ -90,32 +90,48 @@ impl<C: CacheLine> Cache<C> {
 
         false
     }
-    pub fn get(&mut self, key: &[u8]) -> Option<Vec<u8>> {
+    pub fn get<'a>(&'a mut self, key: &[u8]) -> Option<&'a [u8]> {
         let (bucket_id, bkt_key, h) = self.get_bucket_id(key);
         //lock bucket
         //need to add id to get, can't rely on hash
-        let res = self.buckets[bucket_id].get(&mut self.cl_store, bkt_key, Some(&h.to_be_bytes()));
+        let res = self.buckets[bucket_id].get(&self.cl_store, bkt_key, Some(&h.to_be_bytes()));
         match res {
-            FindRes::Found(d) => Some(d.2.value.to_vec()),
+            FindRes::Found(d) => d.3 .2,
             FindRes::NotFound => None,
         }
     }
-    pub fn multi_get(&mut self, keys: Vec<Vec<u8>>) -> Vec<Option<Vec<u8>>> {
-        keys.into_iter()
-            .map(|k| {
-                let (bucket_id, bkt_key, h) = self.get_bucket_id(k.as_slice());
-                //lock bucket
-                //need to add id to get, can't rely on hash
-                let res = self.buckets[bucket_id].get(
-                    &mut self.cl_store,
-                    bkt_key,
-                    Some(&h.to_be_bytes()),
-                );
-                match res {
-                    FindRes::Found(d) => Some(d.2.value.to_vec()),
-                    FindRes::NotFound => None,
-                }
-            })
-            .collect()
+    pub fn multi_get<'a>(&'a mut self, keys: Vec<Vec<u8>>) -> Vec<Option<&'a [u8]>> {
+        if keys.is_empty() {
+            return vec![];
+        }
+        let mut ret = vec![None; keys.len()];
+        for i in 0..keys.len() {
+            let (bucket_id, bkt_key, h) = self.get_bucket_id(keys[i].as_slice());
+            //lock bucket
+            //need to add id to get, can't rely on hash
+            let res = self.buckets[bucket_id].get(&self.cl_store, bkt_key, Some(&h.to_be_bytes()));
+            ret[i] = match res {
+                FindRes::Found(d) => d.3 .2.clone(),
+                FindRes::NotFound => None,
+            };
+        }
+        ret
+        // &keys
+        //     .into_iter()
+        //     .map(|k| {
+        //         let (bucket_id, bkt_key, h) = self.get_bucket_id(k.as_slice());
+        //         //lock bucket
+        //         //need to add id to get, can't rely on hash
+        //         let res = self.buckets[bucket_id].get(
+        //             &mut self.cl_store,
+        //             bkt_key,
+        //             Some(&h.to_be_bytes()),
+        //         );
+        //         match res {
+        //             FindRes::Found(d) => d.3 .2,
+        //             FindRes::NotFound => None,
+        //         }
+        //     })
+        //     .collect()
     }
 }

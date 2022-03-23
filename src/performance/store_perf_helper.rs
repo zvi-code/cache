@@ -126,6 +126,16 @@ impl RandomDataLoad {
 
         (Instant::now() - start).as_micros() as usize
     }
+    fn build_key(&self, op_key_suffix: Option<&str>, id: usize) -> String {
+        unsafe {
+            match op_key_suffix {
+                Some(suf) => (String::from_utf8_unchecked(Vec::from(id.to_be_bytes()))
+                    + &*suf.to_string())
+                    .to_string(),
+                None => String::from_utf8_unchecked(Vec::from(id.to_be_bytes())),
+            }
+        }
+    }
     fn get_ids_data(
         &mut self,
         // ro: &mut ReadOptions,
@@ -141,35 +151,23 @@ impl RandomDataLoad {
             .into_iter()
             .map(|id| self.build_key(op_key_suffix, *id).as_bytes().to_vec())
             .collect();
-
         let results = self.cache.multi_get(cf_ids);
         assert_eq!(results.len(), get_ids.len());
         let dur = (Instant::now() - start).as_micros() as usize;
-        (
-            dur,
-            if verify_data {
-                self.verify_read_res(results, get_ids)
-            //    0
-            } else {
-                0
-            },
-        )
+
+        let num = if verify_data {
+            Self::verify_read_res(results.as_slice(), get_ids)
+        } else {
+            0
+        };
+
+        (dur, num)
     }
 
-    fn build_key(&self, op_key_suffix: Option<&str>, id: usize) -> String {
-        unsafe {
-            match op_key_suffix {
-                Some(suf) => (String::from_utf8_unchecked(Vec::from(id.to_be_bytes()))
-                    + &*suf.to_string())
-                    .to_string(),
-                None => String::from_utf8_unchecked(Vec::from(id.to_be_bytes())),
-            }
-        }
-    }
     ///based on the seed we used when generating data, verify the data we got back
     ///     
     #[allow(unused, dead_code)]
-    fn verify_read_res(&self, results: Vec<Option<Vec<u8>>>, batch_ids: &[usize]) -> u32 {
+    fn verify_read_res(results: &[Option<&[u8]>], batch_ids: &[usize]) -> u32 {
         let mut num_bad_op = 0;
 
         for (i, res) in results.into_iter().enumerate() {
@@ -185,13 +183,15 @@ impl RandomDataLoad {
                         num_bad_op += 1;
                     }
                     _ => {
-                        let curr_fvec: Vec<_> = ret_vec.to_owned();
-                        for (j, &x) in batch_ids.get(i).unwrap().to_be_bytes()[0..curr_fvec.len()]
-                            .iter()
-                            //.into_iter()
+                        //assert_eq!(ret_vec.len(), 3073);
+                        for (j, x) in batch_ids
+                            .get(i)
+                            .unwrap()
+                            .to_be_bytes()
+                            .into_iter()
                             .enumerate()
                         {
-                            assert_eq!(curr_fvec.as_byte_slice()[j], x)
+                            assert_eq!(ret_vec[j], x)
                         }
                     }
                 },

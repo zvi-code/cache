@@ -84,11 +84,29 @@ pub enum InsertRes {
 }
 
 #[derive(Clone, Debug)]
-pub enum FindRes {
+pub enum FindRes<'a> {
     NotFound,
-    Found((ClSlot, ClIndex, CacheDataEntry)),
+    Found(
+        (
+            ClSlot,
+            ClIndex,
+            CacheDataEntry,
+            (Option<&'a [u8]>, Option<&'a [u8]>, Option<&'a [u8]>),
+        ),
+    ),
 }
-
+#[derive(Clone, Debug)]
+pub enum DelRes {
+    NotFound,
+    Found(
+        (
+            ClSlot,
+            ClIndex,
+            CacheDataEntry,
+            (Option<Vec<u8>>, Option<Vec<u8>>, Option<Vec<u8>>),
+        ),
+    ),
+}
 impl Bucket {
     pub fn new<C: CacheLine>() -> Bucket {
         Bucket {
@@ -199,12 +217,12 @@ impl Bucket {
         }
         None
     }
-    pub fn get<C: CacheLine>(
+    pub fn get<'a, C: CacheLine>(
         &self,
-        cl_store: &ClStore<C>,
+        cl_store: &'a ClStore<C>,
         bucket_key: InBktKey,
         key_reminder: KeyReminder,
-    ) -> FindRes {
+    ) -> FindRes<'a> {
         let mut cl = self.head;
         while cl != C::INVALID_CL {
             let cl_info = cl_store.get_cl_w_store(cl);
@@ -214,7 +232,14 @@ impl Bucket {
                 key_reminder,
                 curr_cl.find_entry_for_read(bucket_key).condid,
             ) {
-                Some(slot) => return FindRes::Found((slot, cl, curr_cl.get_entry(slot))),
+                Some(slot) => {
+                    return FindRes::Found((
+                        slot,
+                        cl,
+                        curr_cl.get_entry(slot),
+                        cl_info.1.unwrap().get_data(slot),
+                    ))
+                }
                 None => cl = cl_info.0.unwrap().get_next_cl(),
             }
         }
@@ -225,25 +250,27 @@ impl Bucket {
         cl_store: &mut ClStore<C>,
         bucket_key: InBktKey,
         key_reminder: KeyReminder,
-    ) -> FindRes {
+    ) -> DelRes {
         let mut cl = self.head;
         while cl != C::INVALID_CL {
             let cl_info = cl_store.get_mut_cl_w_store(cl);
             let curr_cl = cl_info.0.unwrap();
+            let curr_cl_info = cl_info.1.unwrap();
             match self.check_condid(
-                cl_info.1.unwrap(),
+                curr_cl_info,
                 key_reminder,
                 curr_cl.find_entry_for_read(bucket_key).condid,
             ) {
                 Some(slot) => {
-                    let res = FindRes::Found((slot, cl, curr_cl.get_entry(slot)));
+                    let res =
+                        DelRes::Found((slot, cl, curr_cl.get_entry(slot), curr_cl_info.free(slot)));
                     curr_cl.clear_entry(slot);
                     return res;
                 }
                 None => cl = curr_cl.get_next_cl(),
             }
         }
-        FindRes::NotFound
+        DelRes::NotFound
     }
     //report capacity usage, entries+store info, on low usage migh get response to reduce quota
     //provide hit info and request capacity quota, calculate efficiency

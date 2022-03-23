@@ -16,7 +16,7 @@ use roaring::RoaringBitmap;
 pub type ClIndex = u32;
 
 pub trait PerClStore {
-    fn free(&mut self, slot: ClSlot) -> ();
+    fn free(&mut self, slot: ClSlot) -> (Option<Vec<u8>>, Option<Vec<u8>>, Option<Vec<u8>>);
 
     fn set(
         &mut self,
@@ -47,10 +47,18 @@ impl PerClVecMemStore {
 }
 
 impl PerClStore for PerClVecMemStore {
-    fn free(&mut self, slot: ClSlot) -> () {
-        self.ids[slot] = vec![];
-        self.k_rems[slot] = vec![];
-        self.v_s[slot] = vec![];
+    fn free(&mut self, slot: ClSlot) -> (Option<Vec<u8>>, Option<Vec<u8>>, Option<Vec<u8>>) {
+        let f = |a: &mut Vec<Vec<u8>>| {
+            if a.len() <= slot {
+                None
+            } else {
+                let elem = Some(a[slot].to_vec());
+                a[slot] = vec![];
+                elem
+            }
+        };
+        let ret = (f(&mut self.ids), f(&mut self.k_rems), f(&mut self.v_s));
+        ret
     }
 
     fn set(
@@ -60,45 +68,22 @@ impl PerClStore for PerClVecMemStore {
         k_rem: Option<&[u8]>,
         val_rem: Option<&[u8]>,
     ) -> () {
-        match id {
+        let set_field = |b: Option<&[u8]>, a: &mut Vec<Vec<u8>>| match b {
             Some(id) => {
-                if slot + 1 > self.ids.len() {
-                    self.ids.resize(slot + 1, vec![]);
+                if slot + 1 > a.len() {
+                    a.resize(slot + 1, vec![]);
                 }
-                self.ids[slot] = id.to_vec();
+                a[slot] = id.to_vec();
             }
             None => {
-                if slot < self.ids.len() {
-                    self.ids[slot] = vec![];
+                if slot < a.len() {
+                    a[slot] = vec![];
                 }
             }
-        }
-        match k_rem {
-            Some(k_rem) => {
-                if slot + 1 > self.k_rems.len() {
-                    self.k_rems.resize(slot + 1, vec![]);
-                }
-                self.k_rems[slot] = k_rem.to_vec();
-            }
-            None => {
-                if slot < self.k_rems.len() {
-                    self.k_rems[slot] = vec![];
-                }
-            }
-        }
-        match val_rem {
-            Some(val_rem) => {
-                if slot + 1 > self.v_s.len() {
-                    self.v_s.resize(slot + 1, vec![]);
-                }
-                self.v_s[slot] = val_rem.to_vec();
-            }
-            None => {
-                if slot < self.v_s.len() {
-                    self.v_s[slot] = vec![];
-                }
-            }
-        }
+        };
+        set_field(id, &mut self.ids);
+        set_field(k_rem, &mut self.k_rems);
+        set_field(val_rem, &mut self.v_s);
     }
     fn get_data(&self, slot: ClSlot) -> (Option<&[u8]>, Option<&[u8]>, Option<&[u8]>) {
         (

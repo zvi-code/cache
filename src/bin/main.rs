@@ -1,5 +1,5 @@
 // use std::arch::x86_64::{_mm256_cmpeq_epi16, _mm256_shuffle_epi8, _mm_crc32_u64, _mm_sha1msg1_epu32};
-use cache_db::cache::bucket::{Bucket, FindRes, InsertRes};
+use cache_db::cache::bucket::{Bucket, DelRes, FindRes, InsertRes};
 use cache_db::cache::cache::Cache;
 use cache_db::cache::cl::{CacheLine, CacheLine64};
 use cache_db::cache::cl_store::ClStore;
@@ -78,7 +78,7 @@ fn main() {
         let res = cache.get(generate_key(k).as_bytes());
         match res {
             Some(resp) => {
-                if resp.as_slice()[0..4] != format!("{}", v).as_bytes()[0..4] {
+                if resp[0..4] != format!("{}", v).as_bytes()[0..4] {
                     println!(
                         "Get res = Key {:x?}: Got {:x?} Asked {:x?}",
                         generate_key(k).as_bytes(),
@@ -197,13 +197,13 @@ fn main() {
                 *k,
                 Some(((*k as usize) + 0xffff66677).to_string().as_bytes()),
             ) {
-                FindRes::Found(d) => {
+                DelRes::Found(d) => {
                     println!(
                         "Delete: key={} value={}: cl {} slot {} data {:?}",
                         k, v, d.1, d.0, d.2.value
                     );
                 }
-                FindRes::NotFound => {
+                DelRes::NotFound => {
                     println!("Delete: key={} value={}: didn't find entry", k, v);
                 }
             }
