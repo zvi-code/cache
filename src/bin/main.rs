@@ -1,8 +1,8 @@
 // use std::arch::x86_64::{_mm256_cmpeq_epi16, _mm256_shuffle_epi8, _mm_crc32_u64, _mm_sha1msg1_epu32};
-use cache_proj::cache::bucket::{Bucket, FindRes, InsertRes};
-use cache_proj::cache::cache::Cache;
-use cache_proj::cache::cl::CacheLine;
-use cache_proj::cache::cl_store::ClStore;
+use cache_db::cache::bucket::{Bucket, DelRes, FindRes, InsertRes};
+use cache_db::cache::cache::Cache;
+use cache_db::cache::cl::{CacheLine, CacheLine64};
+use cache_db::cache::cl_store::ClStore;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
 use std::borrow::Borrow;
@@ -45,10 +45,10 @@ fn main() {
     //     .open(format!("/tmp/cache/log"))
     //     .expect(&*format!("Unable to open file path /tmp/cache/log"));
     // let mut writer = BufWriter::new(f);
-    println!("Hello, world!{}", size_of_val(&CacheLine::new()));
-    let mut cl_store = ClStore::new(7);
-    let mut bucket = Bucket::new();
-    let mut cache = Cache::new(2, 1024);
+    println!("Hello, world!{}", size_of_val(&CacheLine64::new()));
+    let mut cl_store = ClStore::<CacheLine64>::new(7);
+    let mut bucket = Bucket::new::<CacheLine64>();
+    let mut cache = Cache::<CacheLine64>::new(2, 1024);
 
     let mut ids = vec![0_usize; num_keys];
     let mut i = 0;
@@ -75,16 +75,12 @@ fn main() {
     });
     let mut had_failure = false;
     ids.iter().zip(vector.iter()).for_each(|(&k, &v)| {
-        // cache.upsert(
-        //     format!("the key {}", k).as_bytes(),
-        //     format!("{}", v).as_bytes(),
-        // );
         let res = cache.get(generate_key(k).as_bytes());
         match res {
             Some(resp) => {
-                if resp.as_slice()[0..4] != format!("{}", v).as_bytes()[0..4] {
+                if resp[0..4] != format!("{}", v).as_bytes()[0..4] {
                     println!(
-                        "Key {:x?}: Got {:x?} Asked {:x?}",
+                        "Get res = Key {:x?}: Got {:x?} Asked {:x?}",
                         generate_key(k).as_bytes(),
                         resp,
                         format!("{}", v).as_bytes()
@@ -93,7 +89,7 @@ fn main() {
             }
             None => {
                 println!(
-                    "Didn't find Key {:x?}: Asked {:x?} \n",
+                    "Get res = Didn't find Key {:x?}: Asked {:x?} \n",
                     generate_key(k).as_bytes(),
                     format!("{}", v).as_bytes()
                 );
@@ -161,7 +157,7 @@ fn main() {
                     Some(free_cl),
                 );
                 match res.borrow() {
-                    InsertRes::Success(cl) => {
+                    InsertRes::Success((cl, _slot)) => {
                         if *cl == free_cl {
                             free_cl = cl_store.allocate_cl();
                         }
@@ -172,9 +168,11 @@ fn main() {
             })
             .collect::<Vec<InsertRes>>();
         insert_res.iter().for_each(|res| match res {
-            InsertRes::Success(ix) => println!("Succ ix {}", ix),
-            InsertRes::EntryExists(ix) => println!("Exist ix {}", ix),
-            InsertRes::OutOfSpace => println!("OOS"),
+            InsertRes::Success((ix, slot)) => println!("Put res =Succ cl {} slot {}", ix, slot),
+            InsertRes::EntryExists((ix, slot)) => {
+                println!("Put res =Exist cl {} slot {}", ix, slot)
+            }
+            InsertRes::OutOfSpace => println!("Put res = OOS"),
         });
         kv_pairs.iter().for_each(|(k, v)| {
             match bucket.get(
@@ -184,12 +182,12 @@ fn main() {
             ) {
                 FindRes::Found(d) => {
                     println!(
-                        "Get: key={} value={}: cl {} slot {} data {:?}",
+                        "Get res = : key={} value={}: cl {} slot {} data {:?}",
                         k, v, d.1, d.0, d.2.value
                     );
                 }
                 FindRes::NotFound => {
-                    println!("Get: key={} value={}: didn't find entry", k, v);
+                    println!("Get res =: key={} value={}: didn't find entry", k, v);
                 }
             }
         });
@@ -199,13 +197,13 @@ fn main() {
                 *k,
                 Some(((*k as usize) + 0xffff66677).to_string().as_bytes()),
             ) {
-                FindRes::Found(d) => {
+                DelRes::Found(d) => {
                     println!(
                         "Delete: key={} value={}: cl {} slot {} data {:?}",
                         k, v, d.1, d.0, d.2.value
                     );
                 }
-                FindRes::NotFound => {
+                DelRes::NotFound => {
                     println!("Delete: key={} value={}: didn't find entry", k, v);
                 }
             }
@@ -218,12 +216,12 @@ fn main() {
             ) {
                 FindRes::Found(d) => {
                     println!(
-                        "key={} value={}: cl {} slot {} data {:?}",
+                        "Get res =key={} value={}: cl {} slot {} data {:?}",
                         k, v, d.1, d.0, d.2.value
                     );
                 }
                 FindRes::NotFound => {
-                    println!("key={} value={}: didn't find entry", k, v);
+                    println!("Get res =key={} value={}: didn't find entry", k, v);
                 }
             }
         });
@@ -244,9 +242,11 @@ fn main() {
             })
             .collect::<Vec<InsertRes>>();
         insert_res3.iter().for_each(|res| match res {
-            InsertRes::Success(ix) => println!("Succ ix {}", ix),
-            InsertRes::EntryExists(ix) => println!("Exist ix {}", ix),
-            InsertRes::OutOfSpace => println!("OOS"),
+            InsertRes::Success((ix, slot)) => println!("Put res =Succ cl {} slot {}", ix, slot),
+            InsertRes::EntryExists((ix, slot)) => {
+                println!("Put res =Exist cl {} slot {}", ix, slot)
+            }
+            InsertRes::OutOfSpace => println!("Put res =OOS"),
         });
         kv_pairs3.iter().for_each(|(k, v)| {
             match bucket.get(
@@ -256,12 +256,12 @@ fn main() {
             ) {
                 FindRes::Found(d) => {
                     println!(
-                        "key={} value={}: cl {} slot {} data {:?}",
+                        "Get res = key={} value={}: cl {} slot {} data {:?}",
                         k, v, d.1, d.0, d.2.value
                     );
                 }
                 FindRes::NotFound => {
-                    println!("key={} value={}: didn't find entry", k, v);
+                    println!("Get res =key={} value={}: didn't find entry", k, v);
                 }
             }
         });
@@ -273,12 +273,12 @@ fn main() {
             ) {
                 FindRes::Found(d) => {
                     println!(
-                        "key={} value={}: cl {} slot {} data {:?}",
+                        "Get res =key={} value={}: cl {} slot {} data {:?}",
                         k, v, d.1, d.0, d.2.value
                     );
                 }
                 FindRes::NotFound => {
-                    println!("key={} value={}: didn't find entry", k, v);
+                    println!("Get res =key={} value={}: didn't find entry", k, v);
                 }
             }
         });
