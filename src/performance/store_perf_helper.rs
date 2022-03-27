@@ -63,7 +63,7 @@ impl RandomDataLoad {
         RandomDataLoad {
             // options: db_config.options.clone(),
             db_path,
-            cache: Cache::<CacheLine64>::new(2, 1024),
+            cache: Cache::<CacheLine64>::new(1, 1024),
             // db,
             expected_num_vectors: num_vectors,
             curr_num_vectors: curr_num_vecs as usize,

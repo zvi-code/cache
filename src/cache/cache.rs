@@ -4,6 +4,20 @@ use crate::cache::cl_store::{ClIndex, ClStore};
 use murmur3::murmur3_x86_128;
 use std::borrow::Borrow;
 
+// pub enum DataStructureType<C> {
+//     FixedCL(C),
+//     Vec(C),
+//     BTree(C),
+//     Heap(C),
+//     HashTbl(C),
+//     List(C),
+// }
+// pub enum SuperBucketType {
+//     ///a super bucket can be a bucket of super buckets
+//     SuperBuckets(DataStructureType<SuperBucketType>),
+//     Buckets(DataStructureType),
+// }
+
 pub type IBktId = usize;
 #[allow(unused)]
 pub struct Cache<C: CacheLine> {
